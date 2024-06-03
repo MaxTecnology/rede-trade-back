@@ -1,0 +1,42 @@
+a proxima rota é para estornar uma transação, vou te mandar o modelo Transacao:
+
+model Transacao {
+  idTransacao            Int            @id @default(autoincrement())
+  codigo                 String         @default(uuid()) @db.Uuid
+  createdAt              DateTime       @default(now())
+  nomeComprador          String
+  nomeVendedor           String
+  compradorId            Int?
+  vendedorId             Int?
+  saldoUtilizado String
+  valorRt                Float  
+  valorAdicional         Float
+  saldoAnteriorComprador Float
+  saldoAposComprador     Float
+  saldoAnteriorVendedor Float
+  saldoAposVendedor      Float
+  limiteCreditoAnteriorComprador Float
+  limiteCreditoAposComprador Float
+  numeroParcelas         Int // parcelamento
+  descricao              String
+  notaAtendimento        Int
+  observacaoNota String
+  status                 String
+  emiteVoucher                Boolean        @default(false)
+  ofertaId               Int?
+  oferta                 Oferta?        @relation(fields: [ofertaId], references: [idOferta])
+  comprador              Usuarios?      @relation("CompradorToUsuario", fields: [compradorId], references: [idUsuario])
+  vendedor               Usuarios?      @relation("VendedorToUsuario", fields: [vendedorId], references: [idUsuario])
+  subContaCompradorId    Int?
+  subContaComprador      SubContas?     @relation("CompradorToSubConta", fields: [subContaCompradorId], references: [idSubContas], map: "transacaoSubContaCompradorId")
+  subContaVendedorId     Int?
+  subContaVendedor       SubContas?     @relation("VendedorToSubConta", fields: [subContaVendedorId], references: [idSubContas], map: "transacaoSubContaVendedorId")
+  comissao               Float
+  comissaoParcelada      Float
+  parcelamento          Parcelamento[]
+  cobrancas              Cobranca[]
+  voucher                 Voucher[]
+}
+
+
+quando um usuario comprador faz uma transação 

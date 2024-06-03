@@ -1,0 +1,316 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// schema.prisma
+model Usuarios {
+  idUsuario            Int         @id @default(autoincrement())
+  usuarioCriadorId     Int?
+  usuarioCriador       Usuarios?   @relation("UsuariosToUsuarioCriador", fields: [usuarioCriadorId], references: [idUsuario])
+  usuariosCriados      Usuarios[]  @relation("UsuariosToUsuarioCriador")
+  matrizId             Int?        // Identificador da matriz
+  matriz               Usuarios?   @relation("MatrizToUsuarios", fields: [matrizId], references: [idUsuario])
+  usuariosFilhosDaMatriz       Usuarios[]  @relation("MatrizToUsuarios") 
+  nome                 String
+  cpf                  String      @unique
+  email                String      @unique
+  senha                String
+  imagem               String?
+  statusConta          Boolean?    @default(true)
+  reputacao            Float? @default(0.0)
+  razaoSocial          String?
+  nomeFantasia         String?
+  cnpj                 String?
+  inscEstadual         String?
+  inscMunicipal        String?
+  mostrarNoSite        Boolean     @default(true)
+  descricao            String?
+  tipo                 String?
+  tipoDeMoeda          String?
+  status               Boolean     @default(false)
+  restricao            String?
+  conta                Conta?      @relation("UsuariosToConta", map: "contaUsuarioId")
+  nomeContato          String?
+  telefone             String?
+  celular              String?
+  emailContato         String?
+  emailSecundario      String?
+  site                 String?
+  logradouro           String?
+  numero               Int?
+  cep                  String?
+  complemento          String?
+  bairro               String?
+  cidade               String?
+  estado               String?
+  regiao               String?
+  aceitaOrcamento      Boolean
+  aceitaVoucher        Boolean
+  tipoOperacao         Int
+  categoriaId  Int?
+  subcategoriaId Int?
+  ofertas              Oferta[]    @relation("OfertaToUsuario")
+  contasGerenciadas    Conta[]     @relation("GerenteToConta", map: "gerenteContaId")
+  taxaComissaoGerente  Int?
+  transacoesComprador  Transacao[] @relation("CompradorToUsuario")
+  transacoesVendedor   Transacao[] @relation("VendedorToUsuario")
+  cobrancas            Cobranca[]  @relation("CobrancaToUsuario")
+  cobrancasGerenciadas            Cobranca[]  @relation("CobrancaToGerente")
+  permissoesDoUsuario  String     @default("[]")
+  solicitacoesDeCreditoCriadas SolicitacaoCredito[] @relation("UsuariosToUsuarioCriador")
+  solicitacoesDeCreditoSolicitadas SolicitacaoCredito[] @relation("SolicitacaoToUsuario")
+  solicitacoesDeCreditoMatriz SolicitacaoCredito[] @relation("MatrizToSolicitacao")
+  categoria    Categoria?  @relation("UsuarioToCategoria", fields: [categoriaId], references: [idCategoria])
+  subcategoria   Subcategoria? @relation("UsuarioToSubcategoria",fields: [subcategoriaId], references: [idSubcategoria])
+  fundoPermuta FundoPermuta[]  @relation("UsuarioToFundoPermuta")
+  bloqueado Boolean @default(false)
+  tokenResetSenha  String?
+}
+
+model Conta {
+  idConta               Int         @id @default(autoincrement())
+  taxaRepasseMatriz    Int?
+  limiteCredito        Float   @default(0.0)
+  limiteUtilizado     Float        @default(0.0)
+  limiteDisponivel    Float?
+  saldoPermuta         Float
+  limiteVendaMensal    Float
+  limiteVendaTotal     Float
+  limiteVendaEmpresa   Float
+  valorVendaMensalAtual  Float @default(0.0)
+  valorVendaTotalAtual    Float @default(0.0)
+  diaFechamentoFatura   Int
+  dataVencimentoFatura Int
+  numeroConta           String      @unique
+  dataDeAfiliacao       DateTime?
+  nomeFranquia          String?
+  tipoContaId           Int?
+  tipoDaConta           TipoConta?  @relation("TipoContaToConta", fields: [tipoContaId], references: [idTipoConta])
+  usuarioId             Int?        @unique
+  usuario               Usuarios?   @relation("UsuariosToConta", fields: [usuarioId], references: [idUsuario], map: "contaUsuarioId")
+  subContas             SubContas[] @relation("SubContasToConta")
+  planoId               Int?
+  plano                 Plano?      @relation("ContaToPlano", fields: [planoId], references: [idPlano])
+  gerenteContaId        Int?
+  gerenteConta          Usuarios?   @relation("GerenteToConta", fields: [gerenteContaId], references: [idUsuario])
+  cobrancas             Cobranca[]  @relation("CobrancaToConta")
+  permissoesEspecificas String?     @default("[]")
+}
+model TipoConta {
+  idTipoConta      Int     @id @default(autoincrement())
+  tipoDaConta      String
+  prefixoConta     String
+  descricao        String
+  permissoes       String  @default("[]")
+  contasAssociadas Conta[] @relation("TipoContaToConta")
+}
+model Plano {
+  idPlano               Int     @id @default(autoincrement())
+  createdAt    DateTime    @default(now())
+  updatedAt       DateTime   @updatedAt
+  nomePlano             String
+  tipoDoPlano           String?
+  imagem                String?
+  taxaInscricao         Float
+  taxaComissao          Float
+  taxaManutencaoAnual   Float
+  contas                Conta[] @relation("ContaToPlano")
+}
+model SubContas {
+  idSubContas         Int         @id @default(autoincrement())
+  nome                String
+  email               String      @unique
+  cpf                 String      @unique
+  numeroSubConta String @unique
+  senha               String
+  imagem              String?
+  statusConta         Boolean?    @default(true)
+  reputacao           Float?  @default(0.0)
+  telefone            String?
+  celular             String?
+  emailContato        String?
+  logradouro          String?
+  numero              Int?
+  cep                 String?
+  complemento         String?
+  bairro              String?
+  cidade              String?
+  estado              String?
+  contaPaiId          Int
+  contaPai            Conta      @relation("SubContasToConta", fields: [contaPaiId], references: [idConta])
+  ofertas             Oferta[]    @relation("OfertaToSubConta")
+  transacoesComprador Transacao[] @relation("CompradorToSubConta")
+  transacoesVendedor  Transacao[] @relation("VendedorToSubConta")
+  cobrancas           Cobranca[]  @relation("CobrancaToSubConta")
+  permissoes          String      @default("[]")
+  tokenResetSenha  String?
+}
+model Oferta {
+  idOferta     Int         @id @default(autoincrement())
+  createdAt    DateTime    @default(now())
+  idFranquia   Int?
+  nomeFranquia String?
+  titulo       String
+  tipo         String
+  status       Boolean
+  descricao    String
+  quantidade   Int
+  valor        Float
+  limiteCompra Float
+  vencimento   DateTime
+  cidade       String
+  estado       String
+  retirada     String
+  obs          String
+  imagens      String[]
+  usuarioId    Int?
+  nomeUsuario  String
+  categoriaId  Int?
+  subcategoriaId Int?
+  categoria    Categoria?  @relation("OfertaToCategoria", fields: [categoriaId], references: [idCategoria])
+   subcategoria   Subcategoria? @relation("OfertaToSubcategoria",fields: [subcategoriaId], references: [idSubcategoria])
+  usuario      Usuarios?   @relation("OfertaToUsuario", fields: [usuarioId], references: [idUsuario])
+  subcontaId   Int?
+  subconta     SubContas?  @relation("OfertaToSubConta", fields: [subcontaId], references: [idSubContas])
+  transacoes   Transacao[]
+  imagensUp    Imagem[]
+}
+model Imagem {
+  id         Int      @id @default(autoincrement())
+  public_id  String
+  url        String
+  ofertaId   Int
+  oferta     Oferta   @relation(fields: [ofertaId], references: [idOferta])
+}
+model Categoria {
+  idCategoria   Int      @id @default(autoincrement())
+  createdAt    DateTime    @default(now())
+    updatedAt       DateTime   @updatedAt
+  nomeCategoria String
+  subcategorias  Subcategoria[]
+  tipoCategoria String?
+  ofertas       Oferta[] @relation("OfertaToCategoria")
+  usuarios       Usuarios[] @relation("UsuarioToCategoria")
+}
+model Subcategoria {
+  idSubcategoria Int        @id @default(autoincrement())
+  createdAt    DateTime    @default(now())
+    updatedAt       DateTime   @updatedAt
+  nomeSubcategoria String
+  categoriaId Int
+  categoria      Categoria  @relation(fields: [categoriaId], references: [idCategoria])
+  ofertas         Oferta[]   @relation("OfertaToSubcategoria")
+  usuarios         Usuarios[]   @relation("UsuarioToSubcategoria")
+}
+model Transacao {
+  idTransacao            Int            @id @default(autoincrement())
+  codigo                 String         @default(uuid()) @db.Uuid
+  createdAt              DateTime       @default(now())
+  dataDoEstorno      DateTime? 
+  nomeComprador          String
+  nomeVendedor           String
+  compradorId            Int?
+  vendedorId             Int?
+  saldoUtilizado String
+  valorRt                Float  
+  valorAdicional         Float
+  saldoAnteriorComprador Float
+  saldoAposComprador     Float
+  saldoAnteriorVendedor Float
+  saldoAposVendedor      Float
+  limiteCreditoAnteriorComprador Float?
+  limiteCreditoAposComprador Float?
+  numeroParcelas         Int // parcelamento
+  descricao              String
+  notaAtendimento        Int
+  observacaoNota String
+  status                 String
+  emiteVoucher                Boolean        @default(false)
+  ofertaId               Int?
+  oferta                 Oferta?        @relation(fields: [ofertaId], references: [idOferta])
+  comprador              Usuarios?      @relation("CompradorToUsuario", fields: [compradorId], references: [idUsuario])
+  vendedor               Usuarios?      @relation("VendedorToUsuario", fields: [vendedorId], references: [idUsuario])
+  subContaCompradorId    Int?
+  subContaComprador      SubContas?     @relation("CompradorToSubConta", fields: [subContaCompradorId], references: [idSubContas], map: "transacaoSubContaCompradorId")
+  subContaVendedorId     Int?
+  subContaVendedor       SubContas?     @relation("VendedorToSubConta", fields: [subContaVendedorId], references: [idSubContas], map: "transacaoSubContaVendedorId")
+  comissao               Float
+  comissaoParcelada      Float
+  parcelamento          Parcelamento[]
+  cobrancas              Cobranca[]
+  voucher                 Voucher[]
+}
+model Parcelamento {
+  idParcelamento  Int        @id @default(autoincrement())
+  numeroParcela   Int
+  valorParcela    Float
+  comissaoParcela Float
+  transacaoId     Int
+  transacao       Transacao  @relation(fields: [transacaoId], references: [idTransacao])
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+model Voucher {
+  idVoucher      Int      @id @default(autoincrement())
+  codigo         String   @default(uuid()) @db.Uuid
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  dataCancelamento DateTime?
+  transacaoId   Int
+  status    String? @default("Ativo")
+  transacao Transacao @relation(fields: [transacaoId], references: [idTransacao])
+}
+model Cobranca {
+  idCobranca       Int        @id @default(autoincrement())
+  valorFatura      Float
+  referencia String
+  createdAt              DateTime       @default(now())
+  status           String?
+  transacaoId      Int?
+  transacao        Transacao? @relation(fields: [transacaoId], references: [idTransacao])
+  usuarioId        Int?
+  usuario          Usuarios?  @relation("CobrancaToUsuario", fields: [usuarioId], references: [idUsuario])
+  contaId          Int?
+  conta            Conta?     @relation("CobrancaToConta", fields: [contaId], references: [idConta])
+  vencimentoFatura DateTime?
+  subContaId       Int?
+  subConta         SubContas? @relation("CobrancaToSubConta", fields: [subContaId], references: [idSubContas], map: "cobrancaSubContaId")
+  gerenteContaId Int?
+  gerente Usuarios? @relation("CobrancaToGerente", fields: [gerenteContaId], references: [idUsuario])
+}
+model SolicitacaoCredito {
+  idSolicitacaoCredito Int     @id @default(autoincrement())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  valorSolicitado      Float
+  status               String   // Pode ser um enum para "Pendente", "Aprovado", "Negado", etc.
+  motivoRejeicao       String?  // Adicione se quiser fornecer detalhes sobre a rejeição
+  usuarioSolicitante   Usuarios @relation("SolicitacaoToUsuario", fields: [usuarioSolicitanteId], references: [idUsuario])
+  usuarioSolicitanteId Int
+  descricaoSolicitante String?
+  comentarioAgencia     String?
+  matrizAprovacao      Boolean?
+  comentarioMatriz     String?
+  usuarioCriador       Usuarios @relation("UsuariosToUsuarioCriador", fields: [usuarioCriadorId], references: [idUsuario])
+  usuarioCriadorId     Int
+  matriz               Usuarios? @relation("MatrizToSolicitacao", fields: [matrizId], references: [idUsuario])
+  matrizId             Int?
+}
+
+// schema.prisma
+model FundoPermuta {
+  idFundoPermuta Int      @id @default(autoincrement())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  valor          Float
+  usuarioId      Int
+  usuario        Usuarios @relation("UsuarioToFundoPermuta", fields: [usuarioId], references: [idUsuario])
+}
