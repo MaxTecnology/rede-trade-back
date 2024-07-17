@@ -1007,7 +1007,6 @@ accountRouter.post(
     try {
       const { idSubConta } = req.params;
       const { permissoes } = req.body;
-      console.log(idSubConta);
       // Verifica se a subconta existe
       const subcontaExists = await prisma.subContas.findUnique({
         where: { idSubContas: parseInt(idSubConta) },

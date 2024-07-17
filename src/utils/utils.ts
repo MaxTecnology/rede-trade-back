@@ -27,7 +27,6 @@ export async function enviarEmail(
     attachments: anexos, // Adiciona os anexos ao email
   });
 
-  console.log("E-mail enviado: ", info.messageId);
 }
 
 

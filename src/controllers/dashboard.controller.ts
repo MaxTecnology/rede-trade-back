@@ -464,7 +464,6 @@ export const calcularPagamentoGerente = async (req: Request, res: Response) => {
         },
       },
     });
-    console.log(cobrancas);
     const valorTotalPagamento = cobrancas.reduce((total, cobranca) => {
       const valorComissao =
         (cobranca.valorFatura * (cobranca.gerente?.taxaComissaoGerente || 0)) /

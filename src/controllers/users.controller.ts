@@ -83,7 +83,6 @@ export const criarUsuario = async (req: Request, res: Response) => {
       subcategoriaId,
       usuarioCriadorId,
     } = req.body;
-    console.log(req.body)
     if (typeof senha !== "string") {
       return res.status(400).json({ error: "A senha deve ser uma string." });
     }
