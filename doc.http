@@ -1,0 +1,7 @@
+POST https://tradeapi.maximizebot.com.br/usuarios/login
+Content-Type: application/json
+
+{
+  "login":"matriz@matriz.com",
+  "senha":"123456"
+}

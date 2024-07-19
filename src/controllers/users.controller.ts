@@ -461,6 +461,9 @@ export async function BuscarUsuariosParams(req: Request, res: Response) {
         where: filter,
         take: pageSize,
         skip: skip,
+        include: {
+          usuarioCriador: true,
+        },
       }),
       prisma.usuarios.count({
         where: filter,

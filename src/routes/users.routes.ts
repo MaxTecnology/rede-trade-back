@@ -408,6 +408,7 @@ userRouter.post("/login", async (req: Request, res: Response) => {
     }
     const secret = process.env.SECRET || ""
     // Gerar token JWT usando a chave secreta do ambiente
+    console.log(secret);
     const token = jwt.sign({ userId: userId }, secret, {
       expiresIn: "1h",
     });
@@ -418,7 +419,7 @@ userRouter.post("/login", async (req: Request, res: Response) => {
     res.status(200).json({ token, user: userWithoutPassword });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Erro ao fazer login." });
+    res.status(401).json({ error: "Erro ao fazer login." });
   }
 });
 // Rota protegida para obter informações do usuário a partir do token

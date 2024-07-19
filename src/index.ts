@@ -45,8 +45,9 @@ app.use("/creditos", creditRouter);
 app.use("/dashboard", dashboardRouter);
 app.use("/vouchers", voucherRouters)
 // Inicialização do servidor
-const PORT = process.env.PORT || 3024;
+//const PORT = process.env.PORT || 3001;
 
-app.listen(PORT, () => {
-  console.log(`Servidor iniciado na porta ${PORT}`);
+app.listen(3024, '0.0.0.0', () => {
+  console.log(`Servidor iniciado na porta 3024`);
+  //console.log(`Servidor iniciado na porta ${PORT}`);
 });
