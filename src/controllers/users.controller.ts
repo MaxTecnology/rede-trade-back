@@ -225,7 +225,7 @@ Estamos entusiasmados em tê-lo a bordo. Se precisar de assistência ou tiver al
 Atenciosamente,\n
 Equipe RedeTrade`;
 
-      await enviarEmail(destinatario, assunto, corpo);
+      //await enviarEmail(destinatario, assunto, corpo);
       return res.status(201).json({
         ...novoUsuario,
         senha: undefined,
@@ -429,6 +429,9 @@ export async function BuscarUsuariosParams(req: Request, res: Response) {
         where: {
           tipoDaConta: queryParams.tipoDaConta.toString(),
         },
+        include: {
+          contasAssociadas: true, 
+        },
       });
 
       if (tipoConta) {
@@ -463,6 +466,8 @@ export async function BuscarUsuariosParams(req: Request, res: Response) {
         skip: skip,
         include: {
           usuarioCriador: true,
+          conta: true, 
+          
         },
       }),
       prisma.usuarios.count({
