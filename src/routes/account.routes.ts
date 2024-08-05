@@ -144,8 +144,10 @@ accountRouter.get("/listar-contas", async (req: Request, res: Response) => {
 
     // Consultar contas com suporte a paginação
     const contas = await prisma.conta.findMany({
-      skip: startIndex,
-      take: pageSize,
+      // skip: startIndex,
+      // skip: 1,
+      // take: pageSize,
+      // take: 100,
       include: {
         usuario: {
           select: {
@@ -164,10 +166,10 @@ accountRouter.get("/listar-contas", async (req: Request, res: Response) => {
             celular: true,
           },
         },
-        plano: true,
-        subContas: true,
-        cobrancas: true,
-        tipoDaConta: true,
+        // plano: true,
+        // subContas: true,
+        // cobrancas: true,
+        // tipoDaConta: true,
       },
     });
 

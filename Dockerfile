@@ -16,5 +16,7 @@ COPY . .
 # Gere o cliente Prisma
 RUN npx prisma generate
 
+
+
 # Comando padrão para rodar a aplicação
 CMD ["npm", "run", "start"]

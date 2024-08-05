@@ -79,9 +79,10 @@ model Conta {
   idConta               Int         @id @default(autoincrement())
   taxaRepasseMatriz    Int?
   limiteCredito        Float   @default(0.0)
-  limiteUtilizado     Float        @default(0.0)
-  limiteDisponivel    Float?
-  saldoPermuta         Float
+  limiteUtilizado      Float        @default(0.0)
+  limiteDisponivel     Float?
+  saldoPermuta         Float?
+  saldoDinheiro        Float? 
   limiteVendaMensal    Float
   limiteVendaTotal     Float
   limiteVendaEmpresa   Float
