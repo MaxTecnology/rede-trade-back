@@ -81,8 +81,8 @@ model Conta {
   limiteCredito        Float   @default(0.0)
   limiteUtilizado      Float        @default(0.0)
   limiteDisponivel     Float?
-  saldoPermuta         Float?
-  saldoDinheiro        Float? 
+  saldoPermuta         Float @default(0.0)
+  saldoDinheiro        Float @default(0.0)
   limiteVendaMensal    Float
   limiteVendaTotal     Float
   limiteVendaEmpresa   Float
