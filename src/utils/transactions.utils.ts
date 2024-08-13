@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 
 export interface ContaInfo {
   idConta: number;
-  saldoPermuta: number;
+  saldoPermuta: number | null;
   limiteCredito: number;
   limiteUtilizado: number;
   limiteVendaMensal: number;
@@ -38,7 +38,7 @@ export async function obterContaInfo(
               idConta: true,
               saldoPermuta: true,
               limiteCredito: true,
-              limiteUtilizado:true,
+              limiteUtilizado: true,
               limiteVendaMensal: true,
               limiteVendaTotal: true,
               limiteVendaEmpresa: true,
@@ -58,7 +58,7 @@ export async function obterContaInfo(
       });
 
       if (subContaInfo && subContaInfo.contaPai) {
-     return subContaInfo.contaPai;
+        return subContaInfo.contaPai;
       }
     } else if (usuarioId) {
       const usuarioInfo = await prisma.usuarios.findUnique({
@@ -89,7 +89,7 @@ export async function obterContaInfo(
       });
 
       if (usuarioInfo && usuarioInfo.conta) {
-           return usuarioInfo.conta;
+        return usuarioInfo.conta;
       }
     }
 
