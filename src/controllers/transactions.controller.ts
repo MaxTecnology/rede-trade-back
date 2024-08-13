@@ -78,7 +78,7 @@ export const insertTransaction = async (req: Request, res: Response) => {
           "O comprador não possuí limite de crédito disponível para esta transação.",
       });
     }
-
+    const saldoAnterior = saldoAnteriorComprador;
     if (saldoAnteriorComprador !== null) {
       if (valorRt <= saldoAnteriorComprador) {
         saldoAposComprador = saldoAnteriorComprador - valorRt;
