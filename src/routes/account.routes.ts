@@ -1348,7 +1348,8 @@ accountRouter.post(
         return res.status(404).json({ error: "Conta não encontrada." });
       }
 
-      const saldoPermutaAtualizado = (conta.saldoPermuta ?? 0) - valorCreditoUtilizado;
+      // Declarar e inicializar a variável valorCreditoUtilizado
+      let valorCreditoUtilizado = 0;
 
       // Verificar a forma de pagamento
       if (formaPagamento === "100" || formaPagamento === "50") {
@@ -1361,7 +1362,7 @@ accountRouter.post(
           return res.status(404).json({ error: "Plano não encontrado." });
         }
 
-        const valorCreditoUtilizado =
+        valorCreditoUtilizado =
           (formaPagamento === "100" ? 1 : 0.5) * plano.taxaInscricao;
 
         if (conta.limiteCredito === 0) {
@@ -1370,7 +1371,7 @@ accountRouter.post(
             data: {
               limiteCredito: valorCreditoUtilizado,
               limiteUtilizado: valorCreditoUtilizado,
-              saldoPermuta: saldoPermutaAtualizado,
+              saldoPermuta: (conta.saldoPermuta ?? 0) - valorCreditoUtilizado,
             },
           });
         } else if (
@@ -1382,7 +1383,7 @@ accountRouter.post(
             data: {
               limiteUtilizado:
                 (conta.limiteUtilizado || 0) + valorCreditoUtilizado,
-              saldoPermuta: saldoPermutaAtualizado,
+              saldoPermuta: (conta.saldoPermuta ?? 0) - valorCreditoUtilizado,
             },
           });
         }
@@ -1407,5 +1408,6 @@ accountRouter.post(
     }
   }
 );
+
 
 export default accountRouter;
