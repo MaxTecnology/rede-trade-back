@@ -79,202 +79,208 @@ export const insertTransaction = async (req: Request, res: Response) => {
       });
     }
 
-    if (valorRt <= saldoAnteriorComprador) {
-      saldoAposComprador = saldoAnteriorComprador - valorRt;
-      saldoUtilizado = `saldoPermuta - ${valorRt}`;
-      limiteDisponivel =
-        contaComprador.limiteCredito - contaComprador.limiteUtilizado;
-      await prisma.conta.update({
-        where: { idConta: contaComprador.idConta },
-        data: {
-          saldoPermuta: saldoAposComprador,
-          limiteDisponivel,
-        },
-      });
-    } else {
-      const valorAbatidoSaldoPermuta = saldoAnteriorComprador;
-      const valorRestante = valorRt - valorAbatidoSaldoPermuta;
-      limiteUtilizado = valorRestante;
-      saldoAposComprador = saldoAnteriorComprador - valorRt;
-      limiteDisponivel = contaComprador.limiteCredito - limiteUtilizado;
-      saldoUtilizado = `saldoPermuta - ${valorAbatidoSaldoPermuta} / limiteCredito - ${limiteUtilizado}`;
-      await prisma.conta.update({
-        where: { idConta: contaComprador.idConta },
-        data: {
-          saldoPermuta: saldoAposComprador,
-          limiteDisponivel,
-          limiteUtilizado,
-        },
-      });
+    if (saldoAnteriorComprador !== null) {
+      if (valorRt <= saldoAnteriorComprador) {
+        saldoAposComprador = saldoAnteriorComprador - valorRt;
+        saldoUtilizado = `saldoPermuta - ${valorRt}`;
+        limiteDisponivel =
+          contaComprador.limiteCredito - contaComprador.limiteUtilizado;
+        await prisma.conta.update({
+          where: { idConta: contaComprador.idConta },
+          data: {
+            saldoPermuta: saldoAposComprador,
+            limiteDisponivel,
+          },
+        });
+      } else {
+        const valorAbatidoSaldoPermuta = saldoAnteriorComprador;
+        const valorRestante = valorRt - valorAbatidoSaldoPermuta;
+
+        // Garantir que valorAbatidoSaldoPermuta não seja null
+        if (valorAbatidoSaldoPermuta !== null) {
+          limiteUtilizado = valorRestante;
+          saldoAposComprador = saldoAnteriorComprador - valorRt;
+          limiteDisponivel = contaComprador.limiteCredito - limiteUtilizado;
+          saldoUtilizado = `saldoPermuta - ${valorAbatidoSaldoPermuta} / limiteCredito - ${limiteUtilizado}`;
+          await prisma.conta.update({
+            where: { idConta: contaComprador.idConta },
+            data: {
+              saldoPermuta: saldoAposComprador,
+              limiteDisponivel,
+              limiteUtilizado,
+            },
+          });
+        }
+      }
     }
     let limiteCreditoDisponivelAposComprador = limiteDisponivel;
     saldoAposVendedor = saldoAnteriorVendedor + valorRt;
 
 
-     let comissao = 0;
-     let comissaoParcelada = 0;
+    let comissao = 0;
+    let comissaoParcelada = 0;
 
-     if (contaComprador && contaComprador.planoId) {
-       const plano = await prisma.plano.findUnique({
-         where: { idPlano: contaComprador.planoId },
-       });
+    if (contaComprador && contaComprador.planoId) {
+      const plano = await prisma.plano.findUnique({
+        where: { idPlano: contaComprador.planoId },
+      });
 
-       if (plano) {
-         comissao = (plano.taxaComissao / 100) * valorRt;
+      if (plano) {
+        comissao = (plano.taxaComissao / 100) * valorRt;
 
-         if (numeroParcelas) {
-           comissaoParcelada = comissao / numeroParcelas;
-         }
-       }
-     }
+        if (numeroParcelas) {
+          comissaoParcelada = comissao / numeroParcelas;
+        }
+      }
+    }
 
-     const comprador = await prisma.usuarios.findUnique({
-       where: { idUsuario: compradorId },
-     });
+    const comprador = await prisma.usuarios.findUnique({
+      where: { idUsuario: compradorId },
+    });
 
-     const vendedor = await prisma.usuarios.findUnique({
-       where: { idUsuario: vendedorId },
-     });
-     const compradorNome = comprador?.nome;
-     const vendedorNome = vendedor?.nome;
-     // Crie a transação no banco de dados
-     const novaTransacao = await prisma.transacao.create({
-       data: {
-         compradorId,
-         vendedorId,
-         valorRt,
-         numeroParcelas,
-         descricao,
-         saldoAnteriorComprador,
-         saldoAnteriorVendedor,
-         saldoAposComprador,
-         limiteCreditoAnteriorComprador: limiteCreditoDisponivelAnterior,
-         limiteCreditoAposComprador: limiteCreditoDisponivelAposComprador,
-         saldoAposVendedor,
-         comissao,
-         comissaoParcelada,
-         nomeComprador: compradorNome || nomeComprador,
-         nomeVendedor: vendedorNome || nomeVendedor,
-         notaAtendimento,
-         subContaCompradorId: subContaCompradorId || null,
-         subContaVendedorId: subContaVendedorId || null,
-         valorAdicional,
-         observacaoNota,
-         ofertaId,
-         saldoUtilizado: saldoUtilizado || "",
-         status: "Concluída",
-       },
-     });
+    const vendedor = await prisma.usuarios.findUnique({
+      where: { idUsuario: vendedorId },
+    });
+    const compradorNome = comprador?.nome;
+    const vendedorNome = vendedor?.nome;
+    // Crie a transação no banco de dados
+    const novaTransacao = await prisma.transacao.create({
+      data: {
+        compradorId,
+        vendedorId,
+        valorRt,
+        numeroParcelas,
+        descricao,
+        saldoAnteriorComprador,
+        saldoAnteriorVendedor,
+        saldoAposComprador,
+        limiteCreditoAnteriorComprador: limiteCreditoDisponivelAnterior,
+        limiteCreditoAposComprador: limiteCreditoDisponivelAposComprador,
+        saldoAposVendedor,
+        comissao,
+        comissaoParcelada,
+        nomeComprador: compradorNome || nomeComprador,
+        nomeVendedor: vendedorNome || nomeVendedor,
+        notaAtendimento,
+        subContaCompradorId: subContaCompradorId || null,
+        subContaVendedorId: subContaVendedorId || null,
+        valorAdicional,
+        observacaoNota,
+        ofertaId,
+        saldoUtilizado: saldoUtilizado || "",
+        status: "Concluída",
+      },
+    });
 
-      await prisma.conta.update({
-        where: { idConta: contaVendedor.idConta },
+    await prisma.conta.update({
+      where: { idConta: contaVendedor.idConta },
+      data: {
+        saldoPermuta: saldoAposVendedor,
+      },
+    });
+
+    // Obtenha a data atual
+    const dataAtual = new Date();
+
+    // Obtenha o dia de fechamento da fatura na conta do comprador
+    const diaFechamentoFatura = contaComprador.diaFechamentoFatura;
+
+    // Crie uma nova data com o mês atual e o dia do vencimento
+    let dataVencimento = new Date(
+      dataAtual.getFullYear(),
+      dataAtual.getMonth(),
+      contaComprador.dataVencimentoFatura
+    );
+
+    // Verifique se a data atual é maior ou igual ao dia de fechamento
+    if (dataAtual.getDate() >= diaFechamentoFatura) {
+      // Adicione 1 ao mês atual
+      dataVencimento.setMonth(dataVencimento.getMonth() + 1);
+    }
+
+    // Agora você pode usar dataVencimento para o vencimento da fatura
+
+    // Crie as novas cobranças associadas ao usuário, conta ou subconta
+    const cobrancasParceladas = [];
+
+    for (let i = 1; i <= numeroParcelas; i++) {
+      const novaCobrancaParcelada = await prisma.cobranca.create({
         data: {
-          saldoPermuta: saldoAposVendedor,
+          valorFatura: comissaoParcelada,
+          referencia: `Transação #${novaTransacao.idTransacao} - Parcela ${i}`,
+          status: "Emitida", // Defina o status conforme necessário
+          transacaoId: novaTransacao.idTransacao,
+          usuarioId: novaTransacao.compradorId,
+          contaId: contaComprador.idConta, // Ou subContaCompradorId, dependendo do seu modelo
+          vencimentoFatura: dataVencimento,
+          gerenteContaId: contaComprador.gerenteContaId,
         },
       });
 
-     // Obtenha a data atual
-     const dataAtual = new Date();
+      cobrancasParceladas.push(novaCobrancaParcelada);
+    }
+    // Função para formatar a data
+    function formatarData(data: Date): string {
+      const dia = String(data.getDate()).padStart(2, "0");
+      const mes = String(data.getMonth() + 1).padStart(2, "0");
+      const ano = data.getFullYear();
+      const horas = String(data.getHours()).padStart(2, "0");
+      const minutos = String(data.getMinutes()).padStart(2, "0");
 
-     // Obtenha o dia de fechamento da fatura na conta do comprador
-     const diaFechamentoFatura = contaComprador.diaFechamentoFatura;
+      return `${dia}/${mes}/${ano} ${horas}:${minutos}`;
+    }
 
-     // Crie uma nova data com o mês atual e o dia do vencimento
-     let dataVencimento = new Date(
-       dataAtual.getFullYear(),
-       dataAtual.getMonth(),
-       contaComprador.dataVencimentoFatura
-     );
+    // Adicione esta linha para obter a data formatada
+    const dataFormatada = formatarData(new Date());
 
-     // Verifique se a data atual é maior ou igual ao dia de fechamento
-     if (dataAtual.getDate() >= diaFechamentoFatura) {
-       // Adicione 1 ao mês atual
-       dataVencimento.setMonth(dataVencimento.getMonth() + 1);
-     }
+    // Substitua esta linha no seu código existente
 
-     // Agora você pode usar dataVencimento para o vencimento da fatura
+    // Antes de retornar, envie e-mails de confirmação para o comprador e o vendedor
+    const corpoEmailComprador =
+      `Olá ${comprador?.nome}, Obrigado por sua transação na plataforma RedeTrade. Abaixo estão os detalhes da transação:\n\n` +
+      `Data da transação: ${dataFormatada}\n` +
+      `Código da transação: ${novaTransacao.codigo}\n` +
+      `Valor da transação: R$ ${valorRt.toFixed(2)}\n` +
+      `Número de Parcelas: ${numeroParcelas}\n` +
+      `Descrição: ${descricao}\n` +
+      `Nome do Vendedor: ${nomeVendedor}\n` +
+      `Nota de Atendimento: ${notaAtendimento}\n` +
+      `Observações: ${observacaoNota}\n` +
+      `Status: ${novaTransacao.status}\n` +
+      `Agradecemos por usar a RedeTrade!`;
 
-     // Crie as novas cobranças associadas ao usuário, conta ou subconta
-     const cobrancasParceladas = [];
+    const corpoEmailVendedor =
+      `Olá ${vendedor?.nome},Você recebeu uma nova transação na plataforma RedeTrade. Abaixo estão os detalhes da transação:\n\n` +
+      `Data da transação: ${dataFormatada}\n` +
+      `Código da transação: ${novaTransacao.codigo}\n` +
+      `Data da transação: ${Date.now()}\n` +
+      `Valor da transação: RT$ ${valorRt.toFixed(2)}\n` +
+      `Número de Parcelas: ${numeroParcelas}\n` +
+      `Descrição: ${descricao}\n` +
+      `Nome do Comprador: ${nomeComprador}\n` +
+      `Nota de Atendimento: ${notaAtendimento}\n` +
+      `Observações: ${observacaoNota}\n` +
+      `Status: ${novaTransacao.status}\n` +
+      `Agradecemos por usar a RedeTrade!`;
 
-     for (let i = 1; i <= numeroParcelas; i++) {
-       const novaCobrancaParcelada = await prisma.cobranca.create({
-         data: {
-           valorFatura: comissaoParcelada,
-           referencia: `Transação #${novaTransacao.idTransacao} - Parcela ${i}`,
-           status: "Emitida", // Defina o status conforme necessário
-           transacaoId: novaTransacao.idTransacao,
-           usuarioId: novaTransacao.compradorId,
-           contaId: contaComprador.idConta, // Ou subContaCompradorId, dependendo do seu modelo
-           vencimentoFatura: dataVencimento,
-           gerenteContaId: contaComprador.gerenteContaId,
-         },
-       });
+    const emailComprador = comprador?.email;
+    const emailVendedor = vendedor?.email;
 
-       cobrancasParceladas.push(novaCobrancaParcelada);
-     }
-     // Função para formatar a data
-     function formatarData(data: Date): string {
-       const dia = String(data.getDate()).padStart(2, "0");
-       const mes = String(data.getMonth() + 1).padStart(2, "0");
-       const ano = data.getFullYear();
-       const horas = String(data.getHours()).padStart(2, "0");
-       const minutos = String(data.getMinutes()).padStart(2, "0");
+    if (emailComprador && emailVendedor) {
+      await enviarEmailTransacao(
+        emailComprador,
+        "Confirmação de Transação - RedeTrade",
+        corpoEmailComprador
+      );
+      await enviarEmailTransacao(
+        emailVendedor,
+        "Confirmação de Transação - RedeTrade",
+        corpoEmailVendedor
+      );
+      // Retorne a transação recém-criada com dados do comprador e vendedor, juntamente com as novas cobranças
+      return res.status(201).json({ novaTransacao, cobrancasParceladas });
+    }
 
-       return `${dia}/${mes}/${ano} ${horas}:${minutos}`;
-     }
-
-     // Adicione esta linha para obter a data formatada
-     const dataFormatada = formatarData(new Date());
-
-     // Substitua esta linha no seu código existente
-
-     // Antes de retornar, envie e-mails de confirmação para o comprador e o vendedor
-     const corpoEmailComprador =
-       `Olá ${comprador?.nome}, Obrigado por sua transação na plataforma RedeTrade. Abaixo estão os detalhes da transação:\n\n` +
-       `Data da transação: ${dataFormatada}\n` +
-       `Código da transação: ${novaTransacao.codigo}\n` +
-       `Valor da transação: R$ ${valorRt.toFixed(2)}\n` +
-       `Número de Parcelas: ${numeroParcelas}\n` +
-       `Descrição: ${descricao}\n` +
-       `Nome do Vendedor: ${nomeVendedor}\n` +
-       `Nota de Atendimento: ${notaAtendimento}\n` +
-       `Observações: ${observacaoNota}\n` +
-       `Status: ${novaTransacao.status}\n` +
-       `Agradecemos por usar a RedeTrade!`;
-
-     const corpoEmailVendedor =
-       `Olá ${vendedor?.nome},Você recebeu uma nova transação na plataforma RedeTrade. Abaixo estão os detalhes da transação:\n\n` +
-       `Data da transação: ${dataFormatada}\n` +
-       `Código da transação: ${novaTransacao.codigo}\n` +
-       `Data da transação: ${Date.now()}\n` +
-       `Valor da transação: RT$ ${valorRt.toFixed(2)}\n` +
-       `Número de Parcelas: ${numeroParcelas}\n` +
-       `Descrição: ${descricao}\n` +
-       `Nome do Comprador: ${nomeComprador}\n` +
-       `Nota de Atendimento: ${notaAtendimento}\n` +
-       `Observações: ${observacaoNota}\n` +
-       `Status: ${novaTransacao.status}\n` +
-       `Agradecemos por usar a RedeTrade!`;
-
-     const emailComprador = comprador?.email;
-     const emailVendedor = vendedor?.email;
-
-     if (emailComprador && emailVendedor) {
-       await enviarEmailTransacao(
-         emailComprador,
-         "Confirmação de Transação - RedeTrade",
-         corpoEmailComprador
-       );
-       await enviarEmailTransacao(
-         emailVendedor,
-         "Confirmação de Transação - RedeTrade",
-         corpoEmailVendedor
-       );
-       // Retorne a transação recém-criada com dados do comprador e vendedor, juntamente com as novas cobranças
-       return res.status(201).json({ novaTransacao, cobrancasParceladas });
-     }
-   
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Erro ao cadastrar transação." });
@@ -439,18 +445,18 @@ export const estornarTransacao = async (req: Request, res: Response) => {
           const valor = parseInt(valorStr);
 
           if (tipoSaldo.trim() === "saldoPermuta") {
-            novoSaldoPermuta = novoSaldoPermuta + valor 
+            novoSaldoPermuta = novoSaldoPermuta + valor
             saldoPermutaUtilizado = valor
           } else if (tipoSaldo.trim() === "limiteCredito") {
             novoLimiteUtilizado -= valor;
-           limiteUtilizado = valor
+            limiteUtilizado = valor
           }
         })
       );
 
       const novoLimiteDisponivel =
         contaComprador.limiteCredito - novoLimiteUtilizado;
-        const saldoPermutaEstornar = limiteUtilizado > 0 ? novoSaldoPermuta + limiteUtilizado : novoSaldoPermuta
+      const saldoPermutaEstornar = limiteUtilizado > 0 ? novoSaldoPermuta + limiteUtilizado : novoSaldoPermuta
       // Atualizar a conta com os novos saldos
       await prisma.conta.update({
         where: { idConta: contaComprador.idConta },
