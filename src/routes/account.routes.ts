@@ -336,7 +336,7 @@ accountRouter.put(
       const {
         nomeFranquia,
         dataDeAfiliacao,
-        saldoPermuta,
+        saldoPermuta: saldoPermutaRequest,
         valorVendaTotalAtual,
         tipoContaId,
         gerenteContaId,
@@ -362,7 +362,9 @@ accountRouter.put(
       if (!contaExistente) {
         return res.status(404).json({ error: "Conta não encontrada." });
       }
-      const saldoPermuta = saldoPermuta !== null ? saldoPermuta : 0;
+
+      const saldoPermuta = saldoPermutaRequest !== null ? saldoPermutaRequest : 0;
+
       // Atualizar os dados da conta
       const contaAtualizada = await prisma.conta.update({
         where: { idConta: parseInt(id, 10) },
@@ -1346,6 +1348,8 @@ accountRouter.post(
         return res.status(404).json({ error: "Conta não encontrada." });
       }
 
+      const saldoPermutaAtualizado = (conta.saldoPermuta ?? 0) - valorCreditoUtilizado;
+
       // Verificar a forma de pagamento
       if (formaPagamento === "100" || formaPagamento === "50") {
         // Acessar o plano para obter a taxa de inscrição e outros dados
@@ -1366,7 +1370,7 @@ accountRouter.post(
             data: {
               limiteCredito: valorCreditoUtilizado,
               limiteUtilizado: valorCreditoUtilizado,
-              saldoPermuta: (conta.saldoPermuta ?? 0) - valorCreditoUtilizado,
+              saldoPermuta: saldoPermutaAtualizado,
             },
           });
         } else if (
@@ -1378,10 +1382,11 @@ accountRouter.post(
             data: {
               limiteUtilizado:
                 (conta.limiteUtilizado || 0) + valorCreditoUtilizado,
-              saldoPermuta: (conta.saldoPermuta ?? 0) - valorCreditoUtilizado,
+              saldoPermuta: saldoPermutaAtualizado,
             },
           });
         }
+
         // Registrar o valor no FundoPermuta
         await prisma.fundoPermuta.create({
           data: {
@@ -1390,11 +1395,10 @@ accountRouter.post(
           },
         });
       }
-      return res
-        .status(200)
-        .json({
-          message: `Pagamento da taxa de inscrição do plano ${formaPagamento}% lançado como fundo permuta!`,
-        });
+
+      return res.status(200).json({
+        message: `Pagamento da taxa de inscrição do plano ${formaPagamento}% lançado como fundo permuta!`,
+      });
     } catch (error) {
       console.error(error);
       return res.status(500).json({
