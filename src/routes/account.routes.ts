@@ -1366,7 +1366,7 @@ accountRouter.post(
             data: {
               limiteCredito: valorCreditoUtilizado,
               limiteUtilizado: valorCreditoUtilizado,
-              saldoPermuta: conta.saldoPermuta - valorCreditoUtilizado,
+              saldoPermuta: (conta.saldoPermuta ?? 0) - valorCreditoUtilizado,
             },
           });
         } else if (
@@ -1377,8 +1377,8 @@ accountRouter.post(
             where: { idConta: conta.idConta },
             data: {
               limiteUtilizado:
-                conta.limiteUtilizado || 0 + valorCreditoUtilizado,
-              saldoPermuta: conta.saldoPermuta - valorCreditoUtilizado,
+                (conta.limiteUtilizado || 0) + valorCreditoUtilizado,
+              saldoPermuta: (conta.saldoPermuta ?? 0) - valorCreditoUtilizado,
             },
           });
         }
