@@ -57,65 +57,60 @@ export const insertTransaction = async (req: Request, res: Response) => {
     let saldoUtilizado: string | null = null;
     let limiteUtilizado: number | null = 0;
     let limiteDisponivel: number | null = null;
-    // Garantir que o saldo nunca seja negativo
+
     const saldoCreditoDisponivel =
       contaComprador.limiteCredito - contaComprador.limiteUtilizado;
 
-    const saldoAnteriorComprador = contaComprador.saldoPermuta;
+    const saldoAnteriorComprador = contaComprador.saldoPermuta ?? 0;
     let saldoAposComprador = 0;
 
-    const saldoAnteriorVendedor = contaVendedor.saldoPermuta;
+    const saldoAnteriorVendedor = contaVendedor.saldoPermuta ?? 0;
     let saldoAposVendedor = 0;
 
     let limiteCreditoDisponivelAnterior = saldoCreditoDisponivel;
 
     const saldoTotalDisponivel =
       saldoCreditoDisponivel + saldoAnteriorComprador;
-    // Calcule os saldos
+
     if (saldoTotalDisponivel < valorRt) {
       return res.json({
         message:
           "O comprador não possuí limite de crédito disponível para esta transação.",
       });
     }
-    const saldoAnterior = saldoAnteriorComprador;
-    if (saldoAnteriorComprador !== null) {
-      if (valorRt <= saldoAnteriorComprador) {
-        saldoAposComprador = saldoAnteriorComprador - valorRt;
-        saldoUtilizado = `saldoPermuta - ${valorRt}`;
-        limiteDisponivel =
-          contaComprador.limiteCredito - contaComprador.limiteUtilizado;
-        await prisma.conta.update({
-          where: { idConta: contaComprador.idConta },
-          data: {
-            saldoPermuta: saldoAposComprador,
-            limiteDisponivel,
-          },
-        });
-      } else {
-        const valorAbatidoSaldoPermuta = saldoAnteriorComprador;
-        const valorRestante = valorRt - valorAbatidoSaldoPermuta;
 
-        // Garantir que valorAbatidoSaldoPermuta não seja null
-        if (valorAbatidoSaldoPermuta !== null) {
-          limiteUtilizado = valorRestante;
-          saldoAposComprador = saldoAnteriorComprador - valorRt;
-          limiteDisponivel = contaComprador.limiteCredito - limiteUtilizado;
-          saldoUtilizado = `saldoPermuta - ${valorAbatidoSaldoPermuta} / limiteCredito - ${limiteUtilizado}`;
-          await prisma.conta.update({
-            where: { idConta: contaComprador.idConta },
-            data: {
-              saldoPermuta: saldoAposComprador,
-              limiteDisponivel,
-              limiteUtilizado,
-            },
-          });
-        }
-      }
+    if (valorRt <= saldoAnteriorComprador) {
+      saldoAposComprador = saldoAnteriorComprador - valorRt;
+      saldoUtilizado = `saldoPermuta - ${valorRt}`;
+      limiteDisponivel =
+        contaComprador.limiteCredito - contaComprador.limiteUtilizado;
+      await prisma.conta.update({
+        where: { idConta: contaComprador.idConta },
+        data: {
+          saldoPermuta: saldoAposComprador,
+          limiteDisponivel,
+        },
+      });
+    } else {
+      const valorAbatidoSaldoPermuta = saldoAnteriorComprador;
+      const valorRestante = valorRt - valorAbatidoSaldoPermuta;
+
+      limiteUtilizado = valorRestante;
+      saldoAposComprador = saldoAnteriorComprador - valorRt;
+      limiteDisponivel = contaComprador.limiteCredito - (limiteUtilizado ?? 0);
+      saldoUtilizado = `saldoPermuta - ${valorAbatidoSaldoPermuta} / limiteCredito - ${limiteUtilizado}`;
+      await prisma.conta.update({
+        where: { idConta: contaComprador.idConta },
+        data: {
+          saldoPermuta: saldoAposComprador,
+          limiteDisponivel,
+          limiteUtilizado,
+        },
+      });
     }
+
     let limiteCreditoDisponivelAposComprador = limiteDisponivel;
     saldoAposVendedor = saldoAnteriorVendedor + valorRt;
-
 
     let comissao = 0;
     let comissaoParcelada = 0;
@@ -143,7 +138,7 @@ export const insertTransaction = async (req: Request, res: Response) => {
     });
     const compradorNome = comprador?.nome;
     const vendedorNome = vendedor?.nome;
-    // Crie a transação no banco de dados
+
     const novaTransacao = await prisma.transacao.create({
       data: {
         compradorId,
@@ -179,28 +174,19 @@ export const insertTransaction = async (req: Request, res: Response) => {
       },
     });
 
-    // Obtenha a data atual
     const dataAtual = new Date();
-
-    // Obtenha o dia de fechamento da fatura na conta do comprador
     const diaFechamentoFatura = contaComprador.diaFechamentoFatura;
 
-    // Crie uma nova data com o mês atual e o dia do vencimento
     let dataVencimento = new Date(
       dataAtual.getFullYear(),
       dataAtual.getMonth(),
       contaComprador.dataVencimentoFatura
     );
 
-    // Verifique se a data atual é maior ou igual ao dia de fechamento
     if (dataAtual.getDate() >= diaFechamentoFatura) {
-      // Adicione 1 ao mês atual
       dataVencimento.setMonth(dataVencimento.getMonth() + 1);
     }
 
-    // Agora você pode usar dataVencimento para o vencimento da fatura
-
-    // Crie as novas cobranças associadas ao usuário, conta ou subconta
     const cobrancasParceladas = [];
 
     for (let i = 1; i <= numeroParcelas; i++) {
@@ -208,10 +194,10 @@ export const insertTransaction = async (req: Request, res: Response) => {
         data: {
           valorFatura: comissaoParcelada,
           referencia: `Transação #${novaTransacao.idTransacao} - Parcela ${i}`,
-          status: "Emitida", // Defina o status conforme necessário
+          status: "Emitida",
           transacaoId: novaTransacao.idTransacao,
           usuarioId: novaTransacao.compradorId,
-          contaId: contaComprador.idConta, // Ou subContaCompradorId, dependendo do seu modelo
+          contaId: contaComprador.idConta,
           vencimentoFatura: dataVencimento,
           gerenteContaId: contaComprador.gerenteContaId,
         },
@@ -219,7 +205,7 @@ export const insertTransaction = async (req: Request, res: Response) => {
 
       cobrancasParceladas.push(novaCobrancaParcelada);
     }
-    // Função para formatar a data
+
     function formatarData(data: Date): string {
       const dia = String(data.getDate()).padStart(2, "0");
       const mes = String(data.getMonth() + 1).padStart(2, "0");
@@ -230,12 +216,8 @@ export const insertTransaction = async (req: Request, res: Response) => {
       return `${dia}/${mes}/${ano} ${horas}:${minutos}`;
     }
 
-    // Adicione esta linha para obter a data formatada
     const dataFormatada = formatarData(new Date());
 
-    // Substitua esta linha no seu código existente
-
-    // Antes de retornar, envie e-mails de confirmação para o comprador e o vendedor
     const corpoEmailComprador =
       `Olá ${comprador?.nome}, Obrigado por sua transação na plataforma RedeTrade. Abaixo estão os detalhes da transação:\n\n` +
       `Data da transação: ${dataFormatada}\n` +
@@ -277,7 +259,6 @@ export const insertTransaction = async (req: Request, res: Response) => {
         "Confirmação de Transação - RedeTrade",
         corpoEmailVendedor
       );
-      // Retorne a transação recém-criada com dados do comprador e vendedor, juntamente com as novas cobranças
       return res.status(201).json({ novaTransacao, cobrancasParceladas });
     }
 
@@ -433,30 +414,34 @@ export const estornarTransacao = async (req: Request, res: Response) => {
     const contaComprador = usuarioComprador.conta;
 
     // Restaurando os saldos
+    // Restaurando os saldos
     if (saldoUtilizado) {
       const saldoUtilizadoParts = saldoUtilizado.split("/");
-      let novoSaldoPermuta = contaComprador.saldoPermuta;
-      let novoLimiteUtilizado = contaComprador.limiteUtilizado;
-      let saldoPermutaUtilizado = 0
-      let limiteUtilizado = 0
+      let novoSaldoPermuta = contaComprador.saldoPermuta ?? 0;
+      let novoLimiteUtilizado = contaComprador.limiteUtilizado ?? 0;
+      let saldoPermutaUtilizado = 0;
+      let limiteUtilizado = 0;
+
       await Promise.all(
         saldoUtilizadoParts.map(async (part) => {
           const [tipoSaldo, valorStr] = part.trim().split("-");
           const valor = parseInt(valorStr);
 
           if (tipoSaldo.trim() === "saldoPermuta") {
-            novoSaldoPermuta = novoSaldoPermuta + valor
-            saldoPermutaUtilizado = valor
+            novoSaldoPermuta = (novoSaldoPermuta ?? 0) + valor;
+            saldoPermutaUtilizado = valor;
           } else if (tipoSaldo.trim() === "limiteCredito") {
             novoLimiteUtilizado -= valor;
-            limiteUtilizado = valor
+            limiteUtilizado = valor;
           }
         })
       );
 
       const novoLimiteDisponivel =
         contaComprador.limiteCredito - novoLimiteUtilizado;
-      const saldoPermutaEstornar = limiteUtilizado > 0 ? novoSaldoPermuta + limiteUtilizado : novoSaldoPermuta
+      const saldoPermutaEstornar =
+        limiteUtilizado > 0 ? (novoSaldoPermuta ?? 0) + limiteUtilizado : novoSaldoPermuta ?? 0;
+
       // Atualizar a conta com os novos saldos
       await prisma.conta.update({
         where: { idConta: contaComprador.idConta },
@@ -479,16 +464,14 @@ export const estornarTransacao = async (req: Request, res: Response) => {
       !usuarioVendedor.conta ||
       usuarioVendedor.conta.idConta === null
     ) {
-      return res
-        .status(404)
-        .json({ error: "Conta do vendedor não encontrada" });
+      return res.status(404).json({ error: "Conta do vendedor não encontrada" });
     }
 
     const contaVendedor = usuarioVendedor.conta;
     await prisma.conta.update({
       where: { idConta: contaVendedor.idConta },
       data: {
-        saldoPermuta: contaVendedor.saldoPermuta - valorRt,
+        saldoPermuta: (contaVendedor.saldoPermuta ?? 0) - valorRt,
       },
     });
 
