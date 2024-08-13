@@ -127,8 +127,8 @@ accountRouter.delete(
 // Rota para criar uma conta para um usuário
 accountRouter.post(
   "/criar-conta-para-usuario/:id",
-/*  verifyToken,
-  checkBlocked,*/
+  /*  verifyToken,
+    checkBlocked,*/
   criarConta
 );
 
@@ -362,6 +362,7 @@ accountRouter.put(
       if (!contaExistente) {
         return res.status(404).json({ error: "Conta não encontrada." });
       }
+      const saldoPermuta = saldoPermuta !== null ? saldoPermuta : 0;
       // Atualizar os dados da conta
       const contaAtualizada = await prisma.conta.update({
         where: { idConta: parseInt(id, 10) },
@@ -1321,7 +1322,7 @@ accountRouter.post(
   "/pagamento-do-plano/:idUsuario",
   verifyToken,
   checkBlocked,
-  async (req: Request, res: Response) => {  
+  async (req: Request, res: Response) => {
     try {
       const idUsuario = parseInt(req.params.idUsuario, 10);
       const { formaPagamento, idPlano } = req.body;
