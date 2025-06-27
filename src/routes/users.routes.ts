@@ -15,19 +15,87 @@ const userRouter = Router();
 userRouter.post("/criar-usuario", /*verifyToken, checkBlocked, */criarUsuario);
 
 // Rota para listar todos os usuários com paginação
+// SUBSTITUA a rota '/listar-usuarios' existente por esta:
+
 userRouter.get('/listar-usuarios', async (req: Request, res: Response) => {
   try {
-    const { page = 1, pageSize = 60 } = req.query;
+    const { 
+      page = 1, 
+      pageSize = 60,
+      search,
+      categoriaId,
+      estado,
+      cidade,
+      agencia,
+      account 
+    } = req.query;
+
+    console.log('🔍 Parâmetros recebidos:', req.query);
+    
     const pageNumber = parseInt(page as string, 10);
     const pageSizeNumber = parseInt(pageSize as string, 10);
 
     // Calcular o índice inicial do usuário com base na página e no tamanho da página
     const skip = (pageNumber - 1) * pageSizeNumber;
 
-    // Buscar os usuários com os relacionamentos desejados e aplicar a paginação
+    // Construir filtros dinamicamente
+    const whereClause: any = {};
+
+    // Filtro por busca (nome ou nomeFantasia) - Correção de tipo
+    if (search && typeof search === 'string' && search.trim()) {
+      whereClause.OR = [
+        { nome: { contains: search.trim(), mode: 'insensitive' } },
+        { nomeFantasia: { contains: search.trim(), mode: 'insensitive' } },
+        { email: { contains: search.trim(), mode: 'insensitive' } }
+      ];
+    }
+
+    // Filtro por categoria - Correção de tipo
+    if (categoriaId && typeof categoriaId === 'string' && categoriaId !== '') {
+      const catId = parseInt(categoriaId, 10);
+      if (!isNaN(catId)) {
+        whereClause.categoriaId = catId;
+      }
+    }
+
+    // Filtro por estado - Correção de tipo
+    if (estado && typeof estado === 'string' && estado.trim() && estado !== '') {
+      whereClause.estado = estado.trim();
+    }
+
+    // Filtro por cidade - Correção de tipo
+    if (cidade && typeof cidade === 'string' && cidade.trim() && cidade !== '') {
+      whereClause.cidade = { contains: cidade.trim(), mode: 'insensitive' };
+    }
+
+    // Filtro por número da conta - Correção de tipo
+    if (account && typeof account === 'string' && account.trim() && account !== '') {
+      whereClause.conta = {
+        numeroConta: { contains: account.trim(), mode: 'insensitive' }
+      };
+    }
+
+    console.log('📊 Filtros aplicados (whereClause):', JSON.stringify(whereClause, null, 2));
+
+    // Buscar os usuários com os relacionamentos desejados e aplicar a paginação + filtros
     const usuarios = await prisma.usuarios.findMany({
+      where: whereClause,
       include: {
-        conta: true,
+        conta: {
+          include: {
+            gerenteConta: {
+              select: {
+                email: true,
+                emailContato: true,
+                nome: true,
+                nomeContato: true,
+                telefone: true,
+                celular: true,
+                site: true,
+              }
+            },
+          }
+        },
         contasGerenciadas: true,
         ofertas: true,
         transacoesComprador: true,
@@ -38,19 +106,41 @@ userRouter.get('/listar-usuarios', async (req: Request, res: Response) => {
       take: pageSizeNumber,
     });
 
+    // Contar total de usuários com os filtros aplicados
+    const totalUsuarios = await prisma.usuarios.count({
+      where: whereClause
+    });
+
+    console.log(`📈 Encontrados: ${usuarios.length} usuários (total com filtros: ${totalUsuarios})`);
+
     // Omitir senha dos usuários na resposta
-    const usuariosSemSenha = usuarios.map((usuario) => ({ ...usuario, senha: undefined }));
+    const usuariosSemSenha = usuarios.map((usuario) => ({ 
+      ...usuario, 
+      senha: undefined 
+    }));
 
     return res.status(200).json({
       data: usuariosSemSenha,
       meta: {
         page: pageNumber,
         pageSize: pageSizeNumber,
-        total: usuarios.length, // Total de usuários sem a paginação
+        total: totalUsuarios,
+        totalPages: Math.ceil(totalUsuarios / pageSizeNumber),
+        hasNext: pageNumber < Math.ceil(totalUsuarios / pageSizeNumber),
+        hasPrev: pageNumber > 1,
+        // Debug: mostrar filtros aplicados na resposta
+        appliedFilters: {
+          search: (typeof search === 'string') ? search : null,
+          categoriaId: (typeof categoriaId === 'string') ? categoriaId : null,
+          estado: (typeof estado === 'string') ? estado : null,
+          cidade: (typeof cidade === 'string') ? cidade : null,
+          agencia: (typeof agencia === 'string') ? agencia : null,
+          account: (typeof account === 'string') ? account : null
+        }
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error('❌ Erro ao buscar usuários:', error);
     return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });

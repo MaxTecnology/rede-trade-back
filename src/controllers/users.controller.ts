@@ -215,15 +215,15 @@ export const criarUsuario = async (req: Request, res: Response) => {
       const destinatario = email;
       const assunto = "Bem-vindo à Plataforma RedeTrade!";
       const corpo = `Olá ${nome}, \n\n
-Bem-vindo à Plataforma RedeTrade! Agradecemos por escolher nossa plataforma para suas necessidades comerciais.
-\n\n
-Acesse sua conta usando as seguintes credenciais:\n
-E-mail: ${email}\n
-Senha: ${senha}\n\n
-Estamos entusiasmados em tê-lo a bordo. Se precisar de assistência ou tiver alguma dúvida, não hesite em entrar em contato conosco.
-\n\n
-Atenciosamente,\n
-Equipe RedeTrade`;
+      Bem-vindo à Plataforma RedeTrade! Agradecemos por escolher nossa plataforma para suas necessidades comerciais.
+      \n\n
+      Acesse sua conta usando as seguintes credenciais:\n
+      E-mail: ${email}\n
+      Senha: ${senha}\n\n
+      Estamos entusiasmados em tê-lo a bordo. Se precisar de assistência ou tiver alguma dúvida, não hesite em entrar em contato conosco.
+      \n\n
+      Atenciosamente,\n
+      Equipe RedeTrade`;
 
       //await enviarEmail(destinatario, assunto, corpo);
       return res.status(201).json({

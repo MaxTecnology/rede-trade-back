@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "prisma": {
+    "seed": "ts-node --transpile-only prisma/seed/index.ts"
+  },
   "scripts": {
     "seed": "ts-node --transpile-only prisma/seed/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -14,7 +17,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@prisma/client": "^5.7.1",
+    "@prisma/client": "^6.8.2",
     "@types/cors": "^2.8.17",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
@@ -38,7 +41,7 @@
     "@types/qrcode": "^1.5.5",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.6",
-    "prisma": "^5.7.1",
+    "prisma": "^6.8.2",
     "ts-node": "^10.9.2"
   }
 }
