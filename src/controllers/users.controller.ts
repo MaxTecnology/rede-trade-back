@@ -204,6 +204,33 @@ export const criarUsuario = [
         }
       }
 
+      // FUNÇÃO PARA BUSCAR TIPO DE CONTA DINAMICAMENTE
+      const buscarTipoConta = async (tipoUsuario: string): Promise<number> => {
+        const mapeamentoTipos = {
+          'Gerente': 'Premium',
+          'Associado': 'Associado',
+          'Matriz': 'Matriz',
+          'Franquia': 'Franquia',
+          'FranquiaMaster': 'Franquia' // Franquia Master usa mesmo tipo que Franquia
+        };
+
+        const tipoDaConta = mapeamentoTipos[tipoUsuario];
+        if (!tipoDaConta) {
+          throw new Error(`Tipo de usuário '${tipoUsuario}' não tem mapeamento definido`);
+        }
+
+        const tipoConta = await prisma.tipoConta.findFirst({
+          where: { tipoDaConta: tipoDaConta }
+        });
+
+        if (!tipoConta) {
+          throw new Error(`Tipo de conta '${tipoDaConta}' não encontrado no banco de dados`);
+        }
+
+        console.log(`🔍 Tipo de conta para ${tipoUsuario}:`, tipoConta.tipoDaConta, "ID:", tipoConta.idTipoConta);
+        return tipoConta.idTipoConta;
+      };
+
       // FUNÇÃO PARA GERAR NÚMERO DE CONTA ÚNICO
       const gerarNumeroConta = async (prefixo: string): Promise<string> => {
         // Buscar todas as contas com o prefixo específico
@@ -297,10 +324,14 @@ export const criarUsuario = [
 
         console.log("✅ Usuário criado:", novoUsuario.idUsuario, novoUsuario.nome);
 
-        // CRIAR CONTA AUTOMATICAMENTE SE FOR GERENTE
+        // CRIAR CONTA AUTOMATICAMENTE BASEADO NO TIPO
         let novaConta = null;
+        
         if (tipo === 'Gerente') {
           console.log("🏦 Criando conta para gerente...");
+
+          // Buscar tipo de conta dinamicamente
+          const tipoContaId = await buscarTipoConta('Gerente');
 
           // Gerar número único para a conta
           const numeroConta = await gerarNumeroConta('GER');
@@ -309,7 +340,7 @@ export const criarUsuario = [
           // Dados da conta
           const dadosConta = {
             numeroConta: numeroConta,
-            tipoContaId: 11, // Premium (conforme análise)
+            tipoContaId: tipoContaId, // Busca dinâmica
             usuarioId: novoUsuario.idUsuario,
             nomeFranquia: nomeFantasia || nome,
             limiteCredito: limiteCredito ? parseFloat(limiteCredito.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 0,
@@ -336,6 +367,49 @@ export const criarUsuario = [
           });
 
           console.log("✅ Conta criada:", novaConta.idConta, novaConta.numeroConta);
+        }
+        
+        // CRIAR CONTA PARA ASSOCIADOS
+        else if (tipo === 'Associado') {
+          console.log("🏦 Criando conta para associado...");
+
+          // Buscar tipo de conta dinamicamente
+          const tipoContaId = await buscarTipoConta('Associado');
+
+          // Gerar número único para a conta com prefixo ASS
+          const numeroConta = await gerarNumeroConta('ASS');
+          console.log("🔢 Número da conta associado gerado:", numeroConta);
+
+          // Dados da conta para associado
+          const dadosConta = {
+            numeroConta: numeroConta,
+            tipoContaId: tipoContaId, // Busca dinâmica
+            usuarioId: novoUsuario.idUsuario,
+            nomeFranquia: nomeFantasia || nome,
+            limiteCredito: limiteCredito ? parseFloat(limiteCredito.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 5000, // Limite padrão para associados
+            taxaRepasseMatriz: 0, // Associados não têm taxa de repasse
+            dataVencimentoFatura: 10, // Padrão
+            diaFechamentoFatura: 25, // Padrão
+            planoId: planoId ? parseInt(planoId, 10) : 1, // Plano básico como padrão
+            gerenteContaId: usuarioCriadorId ? parseInt(usuarioCriadorId, 10) : null,
+            // Valores padrão para associados
+            limiteUtilizado: 0,
+            saldoPermuta: 0,
+            saldoDinheiro: 0,
+            limiteVendaMensal: 50000, // Limite menor para associados
+            limiteVendaTotal: 200000, // Limite menor para associados
+            limiteVendaEmpresa: 100000, // Limite menor para associados
+            valorVendaMensalAtual: 0,
+            valorVendaTotalAtual: 0,
+            dataDeAfiliacao: new Date(),
+            permissoesEspecificas: JSON.stringify(["BASIC_OPERATIONS", "PROFILE_MANAGEMENT"])
+          };
+
+          novaConta = await prisma.conta.create({
+            data: dadosConta,
+          });
+
+          console.log("✅ Conta de associado criada:", novaConta.idConta, novaConta.numeroConta);
         }
 
         return { usuario: novoUsuario, conta: novaConta };
