@@ -1,7 +1,9 @@
-POST https://tradeapi.maximizebot.com.br/usuarios/login
-Content-Type: application/json
+POST http://localhost:3024/usuarios/upload-imagem
+Content-Type: multipart/form-data
 
-{
-  "login":"matriz@matriz.com",
-  "senha":"123456"
-}
+--boundary123
+Content-Disposition: form-data; name="image"; filename="150x150.png"
+Content-Type: image/png
+
+[dados binários da imagem]
+--boundary123--

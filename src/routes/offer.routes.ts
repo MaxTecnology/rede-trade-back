@@ -3,19 +3,42 @@ import { Request, Response, Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
+import { upload } from "../middlewares/upload"; // Importar o middleware de upload
 
 const prisma = new PrismaClient();
 const offerRouter = Router();
 
-// Rota para cadastrar uma nova oferta
+// Rota para upload de imagem separada
+offerRouter.post('/upload-imagem', upload.single('image'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    }
+
+    const imagePath = `/uploads/images/${req.file.filename}`;
+    
+    console.log("📸 Upload de imagem de oferta realizado:", req.file.filename);
+
+    res.status(200).json({
+      message: 'Upload realizado com sucesso',
+      imagePath: imagePath
+    });
+  } catch (error) {
+    console.error('❌ Erro no upload:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Rota para cadastrar uma nova oferta - ATUALIZADA COM UPLOAD
 offerRouter.post(
   "/criar-oferta",
+  upload.single('imagem'), // Middleware de upload adicionado
   verifyToken,
   checkBlocked,
   async (req: Request, res: Response) => {
     try {
       // Obter dados da oferta do corpo da requisição
-      const {
+      let {
         idFranquia,
         nomeFranquia,
         titulo,
@@ -36,9 +59,17 @@ offerRouter.post(
         categoriaId,
         subcontaId,
       } = req.body;
+
+      // Se uma nova imagem foi enviada, usar seu caminho
+      if (req.file) {
+        const imagePath = `/uploads/images/${req.file.filename}`;
+        imagens = [imagePath]; // Array com a nova imagem
+        console.log("📸 Nova imagem da oferta enviada:", req.file.filename);
+      }
+
       // Verificar se já existe uma oferta com o mesmo nome e mesmo valor
       const ofertaExistente = await prisma.oferta.findFirst({
-        where: { titulo, valor },
+        where: { titulo, valor: parseFloat(valor) },
       });
 
       if (ofertaExistente) {
@@ -49,35 +80,37 @@ offerRouter.post(
 
       const novaOferta = await prisma.oferta.create({
         data: {
-          idFranquia,
+          idFranquia: parseInt(idFranquia),
           nomeFranquia,
           titulo,
           tipo,
-          status,
+          status: status === 'true',
           descricao,
-          quantidade,
-          valor,
-          limiteCompra,
-          vencimento,
+          quantidade: parseInt(quantidade),
+          valor: parseFloat(valor),
+          limiteCompra: parseInt(limiteCompra),
+          vencimento: new Date(vencimento),
           cidade,
           estado,
           retirada,
           obs,
           imagens,
-          usuarioId,
+          usuarioId: parseInt(usuarioId),
           nomeUsuario,
-          categoriaId,
-          subcontaId,
+          categoriaId: parseInt(categoriaId),
+          subcontaId: subcontaId ? parseInt(subcontaId) : null,
         },
       });
 
+      console.log("✅ Oferta criada com sucesso:", novaOferta.titulo);
       res.status(201).json(novaOferta);
     } catch (error) {
-      console.error(error);
+      console.error("❌ Erro ao cadastrar oferta:", error);
       res.status(500).json({ error: "Erro ao cadastrar oferta." });
     }
   }
 );
+
 // Rota para listar todas as ofertas
 offerRouter.get('/listar-ofertas', async (req: Request, res: Response) => {
   try {
@@ -123,16 +156,20 @@ offerRouter.get('/listar-ofertas', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Erro ao listar ofertas.' });
   }
 });
-// Rota para atualizar uma oferta
+
+// Rota para atualizar uma oferta - ATUALIZADA COM UPLOAD
 offerRouter.put(
   "/atualizar-oferta/:ofertaId",
+  upload.single('imagem'), // Middleware de upload adicionado
   verifyToken,
   checkBlocked,
   async (req: Request, res: Response) => {
     try {
       const ofertaId = parseInt(req.params.ofertaId, 10);
-      const {
+      let {
         titulo,
+        tipo,
+        status,
         descricao,
         quantidade,
         valor,
@@ -142,31 +179,52 @@ offerRouter.put(
         estado,
         retirada,
         obs,
+        categoria,
+        imagens
       } = req.body;
+
+      // Se uma nova imagem foi enviada, usar seu caminho
+      let updateData: any = {
+        titulo,
+        tipo,
+        status: status === 'true' || status === true,
+        descricao,
+        quantidade: parseInt(quantidade),
+        valor: parseFloat(valor),
+        limiteCompra: parseInt(limiteCompra),
+        vencimento: new Date(vencimento),
+        cidade,
+        estado,
+        retirada,
+        obs,
+      };
+
+      // Adicionar categoria se fornecida
+      if (categoria) {
+        updateData.categoriaId = parseInt(categoria);
+      }
+
+      // Se uma nova imagem foi enviada, atualizar o array de imagens
+      if (req.file) {
+        const imagePath = `/uploads/images/${req.file.filename}`;
+        updateData.imagens = [imagePath]; // Array com a nova imagem
+        console.log("📸 Imagem da oferta atualizada:", req.file.filename);
+      }
 
       const ofertaAtualizada = await prisma.oferta.update({
         where: { idOferta: ofertaId },
-        data: {
-          titulo,
-          descricao,
-          quantidade,
-          valor,
-          limiteCompra,
-          vencimento,
-          cidade,
-          estado,
-          retirada,
-          obs,
-        },
+        data: updateData,
       });
 
+      console.log("✅ Oferta atualizada com sucesso:", ofertaAtualizada.titulo);
       res.status(200).json(ofertaAtualizada);
     } catch (error) {
-      console.error(error);
+      console.error("❌ Erro ao atualizar oferta:", error);
       res.status(500).json({ error: "Erro ao atualizar oferta." });
     }
   }
 );
+
 // Rota para deletar uma oferta
 offerRouter.delete(
   "/deletar-oferta/:ofertaId",
@@ -202,6 +260,7 @@ offerRouter.delete(
     }
   }
 );
+
 // Rota para buscar uma oferta pelo ID
 offerRouter.get('/buscar-oferta/:ofertaId', async (req: Request, res: Response) => {
   try {
@@ -240,6 +299,7 @@ offerRouter.get('/buscar-oferta/:ofertaId', async (req: Request, res: Response) 
     res.status(500).json({ error: 'Erro ao buscar oferta.' });
   }
 });
+
 // Rota para exibir todas as transações de uma oferta pelo ID
 offerRouter.get('/listar-transacoes/:ofertaId', async (req: Request, res: Response) => {
   try {
@@ -262,6 +322,5 @@ offerRouter.get('/listar-transacoes/:ofertaId', async (req: Request, res: Respon
     res.status(500).json({ error: 'Erro ao buscar transações da oferta.' });
   }
 });
-
 
 export default offerRouter;

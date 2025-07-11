@@ -1,35 +1,22 @@
-// routes/users.routes.ts
+// routes/account.routes.ts
 import { Request, Response, Router } from "express";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import { enviarEmail, gerarToken } from "../utils/utils";
 import * as jwt from "jsonwebtoken";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
-import { 
-  BuscarUsuariosParams, 
-  buscarFranquiasPorMatriz, 
-  criarUsuario, 
-  getTipoDeContaUsuario, 
-  listarUsuariosAssociados,
-  uploadImagem 
-} from "../controllers/users.controller";
+import { BuscarUsuariosParams, buscarFranquiasPorMatriz, criarUsuario, getTipoDeContaUsuario, listarUsuariosAssociados } from "../controllers/users.controller";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
-import { upload } from "../middlewares/upload"; // Importar o middleware de upload
 
 const prisma = new PrismaClient();
 
 const userRouter = Router();
-
-// Rota para upload de imagem separada
-userRouter.post('/upload-imagem', upload.single('image'), uploadImagem);
-
-// Rota para criar um usuário com upload de imagem
-userRouter.post("/criar-usuario", 
-  /*verifyToken, checkBlocked, */
-  criarUsuario // A função criarUsuario já tem o middleware de upload internamente
-);
+// Rota para criar um usuário
+userRouter.post("/criar-usuario", /*verifyToken, checkBlocked, */criarUsuario);
 
 // Rota para listar todos os usuários com paginação
+// SUBSTITUA a rota '/listar-usuarios' existente por esta:
+
 userRouter.get('/listar-usuarios', async (req: Request, res: Response) => {
   try {
     const { 
@@ -179,114 +166,6 @@ userRouter.get('/listar-usuarios', async (req: Request, res: Response) => {
   }
 });
 
-// Rota para listar gerentes - ADICIONE ANTES da rota '/buscar-usuario/:id'
-userRouter.get('/listar-gerentes', async (req: Request, res: Response) => {
-  try {
-    const { 
-      page = 1, 
-      pageSize = 60,
-      search,
-      estado,
-      cidade 
-    } = req.query;
-
-    console.log('🔍 Listando gerentes com filtros:', { search, estado, cidade });
-    
-    const pageNumber = Math.max(1, parseInt(page as string, 10) || 1);
-    const pageSizeNumber = Math.min(100, Math.max(1, parseInt(pageSize as string, 10) || 60));
-    const skip = (pageNumber - 1) * pageSizeNumber;
-
-    // Filtros para gerentes
-    const whereClause: any = {
-      AND: [
-        { tipo: "Gerente" } // FILTRO PRINCIPAL
-      ]
-    };
-
-    // Filtro de busca
-    if (search && typeof search === 'string' && search.trim()) {
-      whereClause.AND.push({
-        OR: [
-          { nome: { contains: search.trim(), mode: 'insensitive' } },
-          { nomeFantasia: { contains: search.trim(), mode: 'insensitive' } },
-          { email: { contains: search.trim(), mode: 'insensitive' } }
-        ]
-      });
-    }
-
-    // Filtro de estado
-    if (estado && typeof estado === 'string' && estado.trim()) {
-      whereClause.AND.push({ estado: estado.trim() });
-    }
-
-    // Filtro de cidade
-    if (cidade && typeof cidade === 'string' && cidade.trim()) {
-      whereClause.AND.push({ 
-        cidade: { contains: cidade.trim(), mode: 'insensitive' } 
-      });
-    }
-
-    // Buscar gerentes
-    const gerentes = await prisma.usuarios.findMany({
-      where: whereClause,
-      include: {
-        conta: {
-          include: {
-            tipoDaConta: true,
-            plano: true,
-          }
-        },
-        categoria: true,
-        subcategoria: true,
-        matriz: {
-          select: {
-            nome: true,
-            nomeFantasia: true,
-            idUsuario: true,
-          }
-        },
-        usuarioCriador: {
-          select: {
-            nome: true,
-            nomeFantasia: true,
-            idUsuario: true,
-          }
-        }
-      },
-      skip,
-      take: pageSizeNumber,
-      orderBy: { nome: 'asc' }
-    });
-
-    // Contar total
-    const totalGerentes = await prisma.usuarios.count({ where: whereClause });
-
-    console.log(`✅ Encontrados ${gerentes.length} gerentes de ${totalGerentes} total`);
-
-    // Remover dados sensíveis
-    const gerentesSemSenha = gerentes.map((gerente) => ({
-      ...gerente,
-      senha: undefined,
-      tokenResetSenha: undefined
-    }));
-
-    return res.status(200).json({
-      data: gerentesSemSenha,
-      meta: {
-        page: pageNumber,
-        pageSize: pageSizeNumber,
-        total: totalGerentes,
-        totalPages: Math.ceil(totalGerentes / pageSizeNumber),
-        hasNext: pageNumber < Math.ceil(totalGerentes / pageSizeNumber),
-        hasPrev: pageNumber > 1
-      }
-    });
-  } catch (error) {
-    console.error('❌ Erro ao listar gerentes:', error);
-    return res.status(500).json({ error: 'Erro interno do servidor.' });
-  }
-});
-
 // Rota para buscar um usuário pelo ID
 userRouter.get('/buscar-usuario/:id', async (req: Request, res: Response) => {
   try {
@@ -335,341 +214,45 @@ userRouter.get('/buscar-usuario/:id', async (req: Request, res: Response) => {
 });
 
 // Rota para atualizar dados de um usuário
-userRouter.get('/listar-gerentes', async (req: Request, res: Response) => {
-  try {
-    const { 
-      page = 1, 
-      pageSize = 60,
-      search,
-      estado,
-      cidade 
-    } = req.query;
-    
-    const pageNumber = Math.max(1, parseInt(page as string, 10) || 1);
-    const pageSizeNumber = Math.min(100, Math.max(1, parseInt(pageSize as string, 10) || 60));
-    const skip = (pageNumber - 1) * pageSizeNumber;
-
-    // Filtros para gerentes
-    const whereClause: any = {
-      tipo: "Gerente"
-    };
-
-    // Filtro de busca
-    if (search && typeof search === 'string' && search.trim()) {
-      whereClause.OR = [
-        { nome: { contains: search.trim(), mode: 'insensitive' } },
-        { nomeFantasia: { contains: search.trim(), mode: 'insensitive' } },
-        { email: { contains: search.trim(), mode: 'insensitive' } }
-      ];
-    }
-
-    // Filtros adicionais
-    if (estado && typeof estado === 'string' && estado.trim()) {
-      whereClause.estado = estado.trim();
-    }
-
-    if (cidade && typeof cidade === 'string' && cidade.trim()) {
-      whereClause.cidade = { contains: cidade.trim(), mode: 'insensitive' };
-    }
-
-    // Buscar gerentes
-    const gerentes = await prisma.usuarios.findMany({
-      where: whereClause,
-      include: {
-        conta: {
-          include: {
-            tipoDaConta: true,
-            plano: true,
-          }
-        },
-        categoria: true,
-        subcategoria: true,
-        matriz: {
-          select: {
-            nome: true,
-            nomeFantasia: true,
-            idUsuario: true,
-          }
-        },
-        usuarioCriador: {
-          select: {
-            nome: true,
-            nomeFantasia: true,
-            idUsuario: true,
-          }
-        }
-      },
-      skip,
-      take: pageSizeNumber,
-      orderBy: { nome: 'asc' }
-    });
-
-    // Contar total
-    const totalGerentes = await prisma.usuarios.count({ where: whereClause });
-
-    // Remover dados sensíveis
-    const gerentesSemSenha = gerentes.map((gerente) => ({
-      ...gerente,
-      senha: undefined,
-      tokenResetSenha: undefined
-    }));
-
-    return res.status(200).json({
-      data: gerentesSemSenha,
-      meta: {
-        page: pageNumber,
-        pageSize: pageSizeNumber,
-        total: totalGerentes,
-        totalPages: Math.ceil(totalGerentes / pageSizeNumber),
-        hasNext: pageNumber < Math.ceil(totalGerentes / pageSizeNumber),
-        hasPrev: pageNumber > 1
-      }
-    });
-  } catch (error) {
-    console.error('❌ Erro ao listar gerentes:', error);
-    return res.status(500).json({ 
-      error: 'Erro interno do servidor.',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Rota para atualizar usuário completo - VERSÃO LIMPA
-
-userRouter.put("/atualizar-usuario-completo/:id", 
-  upload.single('imagem'), 
-  verifyToken, 
-  async (req: Request, res: Response) => {
+userRouter.put("/atualizar-usuario/:id", verifyToken, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      
-      console.log('🚀 === INÍCIO ATUALIZAÇÃO USUÁRIO ===');
-      console.log('🆔 ID do usuário:', id);
-      console.log('📁 Arquivo enviado:', req.file ? {
-        filename: req.file.filename,
-        mimetype: req.file.mimetype,
-        size: req.file.size
-      } : 'Nenhum arquivo');
+      const dadosAtualizados = req.body;
 
-      // Extrair todos os dados do body
-      const dadosRecebidos = { ...req.body };
-      
-      // Se tem arquivo, adicionar à estrutura
-      if (req.file) {
-        dadosRecebidos.imagem = `/uploads/images/${req.file.filename}`;
-        console.log('📸 Imagem processada:', dadosRecebidos.imagem);
-      }
+      console.log("Atualizando usuário ID:", id, "com dados:", dadosAtualizados);
 
-      // MAPEAMENTO CORRETO BASEADO NO SCHEMA REAL
-      const camposUsuario = [
-        // Campos da tabela Usuarios (conforme schema)
-        'nome', 'cpf', 'email', 'senha', 'imagem', 
-        'statusConta', 'reputacao', 'razaoSocial', 'nomeFantasia', 'cnpj',
-        'inscEstadual', 'inscMunicipal', 'mostrarNoSite', 'descricao', 'tipo',
-        'tipoDeMoeda', 'status', 'restricao', 'nomeContato', 'telefone', 'celular',
-        'emailContato', 'emailSecundario', 'site', 'logradouro', 'numero', 'cep',
-        'complemento', 'bairro', 'cidade', 'estado', 'regiao', 
-        'aceitaOrcamento', 'aceitaVoucher', 'tipoOperacao',
-        'categoriaId', 'subcategoriaId', 'permissoesDoUsuario', 'bloqueado',
-        'tokenResetSenha',
-        // CONFIRMADO NO SCHEMA: taxaComissaoGerente está na tabela Usuarios (linha 72)
-        'taxaComissaoGerente'
-      ];
-      
-      const camposConta = [
-        // Campos da tabela Conta (conforme schema)
-        'taxaRepasseMatriz', 'limiteCredito', 'limiteUtilizado', 'limiteDisponivel',
-        'saldoPermuta', 'saldoDinheiro', 'limiteVendaMensal', 'limiteVendaTotal', 
-        'limiteVendaEmpresa', 'valorVendaMensalAtual', 'valorVendaTotalAtual',
-        'diaFechamentoFatura', 'numeroConta', 'dataDeAfiliacao', 'nomeFranquia',
-        'tipoContaId', 'usuarioId', 'planoId', 'gerenteContaId', 'permissoesEspecificas',
-        // CONFIRMADO NO SCHEMA: dataVencimentoFatura está na tabela Conta (linha 89)
-        'dataVencimentoFatura'
-      ];
-      
-      const dadosUsuario = {};
-      const dadosConta = {};
-      
-      // Separar campos
-      Object.keys(dadosRecebidos).forEach(key => {
-        if (key === 'taxaGerente') {
-          // MAPEAMENTO: taxaGerente -> taxaComissaoGerente (tabela Usuarios)
-          dadosUsuario['taxaComissaoGerente'] = dadosRecebidos[key];
-        } else if (camposUsuario.includes(key)) {
-          dadosUsuario[key] = dadosRecebidos[key];
-        } else if (camposConta.includes(key)) {
-          dadosConta[key] = dadosRecebidos[key];
-        } else {
-          console.log(`⚠️ Campo não mapeado: ${key} = ${dadosRecebidos[key]}`);
-        }
+      // Verificar se o usuário existe
+      const usuarioExiste = await prisma.usuarios.findUnique({
+        where: { idUsuario: parseInt(id, 10) },
       });
 
-      console.log('👤 Dados do usuário:', Object.keys(dadosUsuario));
-      console.log('💳 Dados da conta:', Object.keys(dadosConta));
-
-      // Remover duplicações no tipo
-      if (Array.isArray(dadosUsuario.tipo)) {
-        dadosUsuario.tipo = dadosUsuario.tipo[0];
-        console.log('🔧 Tipo corrigido para:', dadosUsuario.tipo);
+      if (!usuarioExiste) {
+        return res.status(404).json({ error: "Usuário não encontrado." });
       }
 
-      // Usar transação
-      const resultado = await prisma.$transaction(async (prisma) => {
-        // Verificar se o usuário existe
-        const usuarioExiste = await prisma.usuarios.findUnique({
-          where: { idUsuario: parseInt(id, 10) },
-          include: { conta: true }
-        });
-
-        if (!usuarioExiste) {
-          throw new Error("Usuário não encontrado");
-        }
-
-        console.log('✅ Usuário encontrado:', {
-          id: usuarioExiste.idUsuario,
-          nome: usuarioExiste.nome,
-          temConta: !!usuarioExiste.conta
-        });
-
-        // Atualizar usuário se há dados
-        let usuarioAtualizado = usuarioExiste;
-        if (Object.keys(dadosUsuario).length > 0) {
-          const dadosProcessados = { ...dadosUsuario };
-          
-          // Converter tipos conforme schema
-          if (dadosProcessados.numero && dadosProcessados.numero !== '') {
-            dadosProcessados.numero = parseInt(dadosProcessados.numero, 10); // Int no schema
-          }
-          if (dadosProcessados.tipoOperacao && dadosProcessados.tipoOperacao !== '') {
-            dadosProcessados.tipoOperacao = parseInt(dadosProcessados.tipoOperacao, 10); // Int no schema
-          }
-          if (dadosProcessados.reputacao && dadosProcessados.reputacao !== '') {
-            dadosProcessados.reputacao = parseFloat(dadosProcessados.reputacao); // Float no schema
-          }
-          if (dadosProcessados.taxaComissaoGerente && dadosProcessados.taxaComissaoGerente !== '') {
-            dadosProcessados.taxaComissaoGerente = parseInt(dadosProcessados.taxaComissaoGerente, 10); // Int no schema
-          }
-          if (dadosProcessados.categoriaId && dadosProcessados.categoriaId !== '') {
-            dadosProcessados.categoriaId = parseInt(dadosProcessados.categoriaId, 10);
-          }
-          if (dadosProcessados.subcategoriaId && dadosProcessados.subcategoriaId !== '') {
-            dadosProcessados.subcategoriaId = parseInt(dadosProcessados.subcategoriaId, 10);
-          }
-          
-          // Converter booleanos conforme schema
-          ['aceitaOrcamento', 'aceitaVoucher', 'statusConta', 'mostrarNoSite', 'status', 'bloqueado'].forEach(campo => {
-            if (dadosProcessados[campo] !== undefined) {
-              dadosProcessados[campo] = dadosProcessados[campo] === 'true' || dadosProcessados[campo] === true;
-            }
-          });
-          
-          // Remover campos vazios
-          Object.keys(dadosProcessados).forEach(key => {
-            if (dadosProcessados[key] === '' || dadosProcessados[key] === undefined || dadosProcessados[key] === 'undefined') {
-              delete dadosProcessados[key];
-            }
-          });
-          
-          console.log('📝 Dados processados para usuário:', {
-            campos: Object.keys(dadosProcessados),
-            temImagem: !!dadosProcessados.imagem,
-            taxaComissaoGerente: dadosProcessados.taxaComissaoGerente
-          });
-
-          usuarioAtualizado = await prisma.usuarios.update({
-            where: { idUsuario: parseInt(id, 10) },
-            data: dadosProcessados,
-          });
-          
-          console.log('✅ Usuário atualizado no banco');
-        }
-
-        // Atualizar conta se há dados e conta existe
-        let contaAtualizada = usuarioExiste.conta;
-        if (Object.keys(dadosConta).length > 0 && usuarioExiste.conta) {
-          const dadosContaProcessados = { ...dadosConta };
-          
-          // Converter tipos conforme schema da tabela Conta
-          // Float fields
-          ['limiteCredito', 'limiteUtilizado', 'limiteDisponivel', 'saldoPermuta', 'saldoDinheiro',
-           'limiteVendaMensal', 'limiteVendaTotal', 'limiteVendaEmpresa', 
-           'valorVendaMensalAtual', 'valorVendaTotalAtual'].forEach(campo => {
-            if (dadosContaProcessados[campo]) {
-              let valor = dadosContaProcessados[campo].toString().replace(/[^\d,.-]/g, '');
-              valor = valor.replace(',', '.');
-              dadosContaProcessados[campo] = parseFloat(valor) || 0;
-            }
-          });
-          
-          // Int fields
-          ['taxaRepasseMatriz', 'diaFechamentoFatura', 'dataVencimentoFatura', 
-           'tipoContaId', 'usuarioId', 'planoId', 'gerenteContaId'].forEach(campo => {
-            if (dadosContaProcessados[campo] && dadosContaProcessados[campo] !== '') {
-              dadosContaProcessados[campo] = parseInt(dadosContaProcessados[campo], 10);
-            }
-          });
-          
-          // Remover campos vazios
-          Object.keys(dadosContaProcessados).forEach(key => {
-            if (dadosContaProcessados[key] === '' || dadosContaProcessados[key] === undefined || dadosContaProcessados[key] === 'undefined') {
-              delete dadosContaProcessados[key];
-            }
-          });
-          
-          console.log('💰 Dados processados para conta:', Object.keys(dadosContaProcessados));
-
-          contaAtualizada = await prisma.conta.update({
-            where: { idConta: usuarioExiste.conta.idConta },
-            data: dadosContaProcessados,
-          });
-          
-          console.log('✅ Conta atualizada no banco');
-        }
-
-        return { usuario: usuarioAtualizado, conta: contaAtualizada };
+      // Atualizar o usuário pelo ID
+      const usuarioAtualizado = await prisma.usuarios.update({
+        where: { idUsuario: parseInt(id, 10) },
+        data: dadosAtualizados,
       });
 
-      // Resposta final
-      const resposta = {
-        ...resultado.usuario,
-        senha: undefined,
-        tokenResetSenha: undefined,
-        conta: resultado.conta
-      };
+      // Remover a senha do objeto de resposta
+      const usuarioSemSenha = { ...usuarioAtualizado, senha: undefined, tokenResetSenha: undefined };
 
-      console.log('🎉 Atualização concluída com sucesso!');
-      console.log('🚀 === FIM ATUALIZAÇÃO USUÁRIO ===');
-      
-      return res.status(200).json(resposta);
+      console.log("Usuário atualizado com sucesso");
+      return res.status(200).json(usuarioSemSenha);
     } catch (error) {
-      console.error('❌ === ERRO NA ATUALIZAÇÃO ===');
-      console.error('❌ Erro:', error.message);
-      console.error('❌ Stack:', error.stack);
-      console.error('❌ === FIM ERRO ===');
-      
-      return res.status(500).json({ 
-        error: error instanceof Error ? error.message : "Erro interno do servidor.",
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
-      });
+      console.error("Erro ao atualizar usuário:", error);
+      return res.status(500).json({ error: "Erro interno do servidor." });
     }
   }
 );
 
-// Nova rota para atualizar usuário e conta de forma transacional - ATUALIZADA COM UPLOAD
-userRouter.put("/atualizar-usuario-completo/:id", 
-  upload.single('imagem'), // Middleware de upload adicionado
-  verifyToken, 
-  async (req: Request, res: Response) => {
+// Nova rota para atualizar usuário e conta de forma transacional
+userRouter.put("/atualizar-usuario-completo/:id", verifyToken, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      let { dadosUsuario, dadosConta } = req.body;
-
-      // Se uma nova imagem foi enviada, adicionar aos dados do usuário
-      if (req.file) {
-        if (!dadosUsuario) dadosUsuario = {};
-        dadosUsuario.imagem = `/uploads/images/${req.file.filename}`;
-        console.log("📸 Nova imagem do usuário completo enviada:", req.file.filename);
-      }
+      const { dadosUsuario, dadosConta } = req.body;
 
       console.log("Atualizando usuário completo ID:", id);
       console.log("Dados usuário:", dadosUsuario);
@@ -716,10 +299,10 @@ userRouter.put("/atualizar-usuario-completo/:id",
         conta: resultado.conta
       };
 
-      console.log("✅ Usuário e conta atualizados com sucesso:", resultado.usuario.nome);
+      console.log("Usuário e conta atualizados com sucesso");
       return res.status(200).json(resposta);
     } catch (error) {
-      console.error("❌ Erro ao atualizar usuário completo:", error);
+      console.error("Erro ao atualizar usuário completo:", error);
       return res.status(500).json({ 
         error: error instanceof Error ? error.message : "Erro interno do servidor." 
       });
@@ -834,7 +417,6 @@ const novasPermissoes = JSON.parse(usuario.permissoesDoUsuario || "[]").filter(
     }
   }
 );
-
 // Rota para listar todas as permissões de um Usuário
   userRouter.get('/listar-permissoes/:idUsuario', async (req: Request, res: Response) => {
     try {
@@ -918,7 +500,6 @@ userRouter.post("/solicitar-redefinicao-senha-usuario", async (req: Request, res
         return res.status(500).json({ error: "Erro interno do servidor." });
     }
 });
-
 // Rota para redefinir a senha do usuário usando o token
 userRouter.post("/redefinir-senha-usuario/:idUsuario",  async (req: Request, res: Response) => {
     try {
@@ -966,7 +547,6 @@ console.log(novaSenha,token,"ID USUARIO:", idUsuario)
     }
   }
 );
-
 // Rota de login
 userRouter.post("/login", async (req: Request, res: Response) => {
   try {
@@ -1027,7 +607,6 @@ userRouter.post("/login", async (req: Request, res: Response) => {
     res.status(401).json({ error: "Erro ao fazer login." });
   }
 });
-
 // Rota protegida para obter informações do usuário a partir do token
 userRouter.get('/user-info', verifyToken, async (_req: Request, res: Response) => {
   try {
@@ -1197,12 +776,13 @@ userRouter.get("/listar-ofertas/:idUsuario",  async (req: Request, res: Response
   }
 );
 
+
 userRouter.get("/buscar-tipo-de-conta/:userId", getTipoDeContaUsuario);
 
 userRouter.get('/buscar-franquias/:matrizId', buscarFranquiasPorMatriz);
 
 userRouter.get('/usuarios-criados/:usuarioCriadorId', listarUsuariosAssociados);
 
-userRouter.get('/buscar-usuario-params', BuscarUsuariosParams);
+userRouter.get('/buscar-usuario-params', BuscarUsuariosParams)
 
 export default userRouter;

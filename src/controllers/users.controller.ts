@@ -2,11 +2,14 @@ import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import { enviarEmail } from "../utils/utils";
+import { upload } from "../middlewares/upload";
 
 const prisma = new PrismaClient();
+
 interface FilterParams {
   [key: string]: any;
 }
+
 export const getTipoDeContaUsuario = async (req: Request, res: Response) => {
   try {
     const userId = parseInt(req.params.userId, 10); // Certifique-se de usar o parâmetro correto
@@ -42,136 +45,221 @@ export const getTipoDeContaUsuario = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Erro interno do servidor" });
   }
 };
-export const criarUsuario = async (req: Request, res: Response) => {
-    const {
-      nome,
-      cpf,
-      email,
-      senha,
-      imagem,
-      statusConta,
-      reputacao,
-      razaoSocial,
-      nomeFantasia,
-      cnpj,
-      inscEstadual,
-      inscMunicipal,
-      mostrarNoSite,
-      descricao,
-      tipo,
-      tipoDeMoeda,
-      status,
-      restricao,
-      nomeContato,
-      telefone,
-      celular,
-      emailContato,
-      emailSecundario,
-      site,
-      logradouro,
-      numero,
-      cep,
-      complemento,
-      bairro,
-      cidade,
-      estado,
-      regiao,
-      aceitaOrcamento,
-      aceitaVoucher,
-      tipoOperacao,
-      categoriaId,
-      subcategoriaId,
-      usuarioCriadorId,
-    } = req.body;
-    if (typeof senha !== "string") {
-      return res.status(400).json({ error: "A senha deve ser uma string." });
-    }
-    // Verifica se já existe um usuário com o mesmo e-mail ou CPF
-    const usuarioExistente = await prisma.usuarios.findFirst({
-      where: {
-        OR: [{ email: email }, { cpf: cpf }],
-      },
-    });
 
-    if (usuarioExistente) {
-      return res
-        .status(400)
-        .json({ error: "Usuário com o mesmo e-mail ou CPF já existe." });
+// Função para upload de imagem separada
+export const uploadImagem = async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhuma imagem foi enviada' });
     }
+
+    const imagePath = `/uploads/images/${req.file.filename}`;
     
-    if (usuarioCriadorId) {
-      const usuarioCriador = await prisma.usuarios.findUnique({
-        where: { idUsuario: parseInt(usuarioCriadorId, 10) },
-        include: {
-          conta: {
-            select: {
-              tipoDaConta: true,
-            },
-          },
+    res.json({
+      message: 'Upload realizado com sucesso',
+      imagePath: imagePath
+    });
+  } catch (error) {
+    console.error('Erro no upload:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+};
+
+// Função criarUsuario com middleware de upload
+export const criarUsuario = [
+  upload.single('imagem'),
+  async (req: Request, res: Response) => {
+    try {
+      const {
+        nome,
+        cpf,
+        email,
+        senha,
+        statusConta,
+        reputacao,
+        razaoSocial,
+        nomeFantasia,
+        cnpj,
+        inscEstadual,
+        inscMunicipal,
+        mostrarNoSite,
+        descricao,
+        tipo,
+        tipoDeMoeda,
+        status,
+        restricao,
+        nomeContato,
+        telefone,
+        celular,
+        emailContato,
+        emailSecundario,
+        site,
+        logradouro,
+        numero,
+        cep,
+        complemento,
+        bairro,
+        cidade,
+        estado,
+        regiao,
+        aceitaOrcamento,
+        aceitaVoucher,
+        tipoOperacao,
+        categoriaId,
+        subcategoriaId,
+        usuarioCriadorId,
+        // Campos específicos para conta (quando for gerente)
+        limiteCredito,
+        taxaGerente,
+        dataVencimentoFatura,
+        planoId
+      } = req.body;
+
+      // Verificar se tem imagem enviada e definir o caminho
+      let imagemPath = null;
+      if (req.file) {
+        imagemPath = `/uploads/images/${req.file.filename}`;
+        console.log("📸 Imagem enviada:", req.file.filename);
+      }
+
+      if (typeof senha !== "string") {
+        return res.status(400).json({ error: "A senha deve ser uma string." });
+      }
+
+      // Verificar se já existe usuário com mesmo email ou CPF
+      const usuarioExistente = await prisma.usuarios.findFirst({
+        where: {
+          OR: [{ email: email }, { cpf: cpf }],
         },
       });
 
-      if (!usuarioCriador) {
+      if (usuarioExistente) {
         return res
-          .status(404)
-          .json({ error: "Usuário criador não encontrado." });
+          .status(400)
+          .json({ error: "Usuário com o mesmo e-mail ou CPF já existe." });
       }
-      let matrizId;
 
-      if (
-        usuarioCriador.conta &&
-        usuarioCriador.conta.tipoDaConta?.tipoDaConta === "Matriz"
-      ) {
-        // Se o usuário criador tem o tipo de conta "Matriz"
-        matrizId = usuarioCriadorId;
-      } else {
-        // Se o usuário criador não é uma matriz, procuramos até encontrar a matriz
-        let usuarioAtual: any = usuarioCriador;
+      let matrizId = null;
 
-        while (
-          usuarioAtual?.conta?.tipoDaConta?.tipoDaConta !== "Matriz" &&
-          usuarioAtual.usuarioCriadorId
-        ) {
-          usuarioAtual = await prisma.usuarios.findUnique({
-            where: { idUsuario: usuarioAtual.usuarioCriadorId },
-            include: {
-              conta: {
-                select: {
-                  tipoDaConta: true,
-                },
+      // Lógica para determinar matriz
+      if (usuarioCriadorId) {
+        console.log("🔍 Buscando usuário criador:", usuarioCriadorId);
+        
+        const usuarioCriador = await prisma.usuarios.findUnique({
+          where: { idUsuario: parseInt(usuarioCriadorId, 10) },
+          include: {
+            conta: {
+              include: {
+                tipoDaConta: true,
               },
             },
-          });
-        }
-        if (usuarioAtual?.conta?.tipoDaConta?.tipoDaConta === "Matriz") {
-          matrizId = usuarioAtual.idUsuario;
-        } else {
+          },
+        });
+
+        if (!usuarioCriador) {
           return res
-            .status(500)
-            .json({ error: "Não foi possível encontrar a matriz associada." });
+            .status(404)
+            .json({ error: "Usuário criador não encontrado." });
+        }
+
+        const tipoConta = usuarioCriador.conta?.tipoDaConta?.tipoDaConta;
+        
+        if (tipoConta === "Matriz") {
+          matrizId = usuarioCriador.idUsuario;
+        } else if (usuarioCriador.matrizId) {
+          matrizId = usuarioCriador.matrizId;
+        } else {
+          // Buscar matriz na hierarquia
+          let usuarioAtual = usuarioCriador;
+          let tentativas = 0;
+          const maxTentativas = 10;
+
+          while (
+            usuarioAtual?.conta?.tipoDaConta?.tipoDaConta !== "Matriz" &&
+            usuarioAtual.usuarioCriadorId &&
+            tentativas < maxTentativas
+          ) {
+            tentativas++;
+            usuarioAtual = await prisma.usuarios.findUnique({
+              where: { idUsuario: usuarioAtual.usuarioCriadorId },
+              include: {
+                conta: {
+                  include: {
+                    tipoDaConta: true,
+                  },
+                },
+              },
+            });
+
+            if (!usuarioAtual) break;
+          }
+
+          if (usuarioAtual?.conta?.tipoDaConta?.tipoDaConta === "Matriz") {
+            matrizId = usuarioAtual.idUsuario;
+          } else {
+            return res
+              .status(500)
+              .json({ error: "Não foi possível encontrar a matriz associada." });
+          }
         }
       }
-      const hashedPassword = await bcrypt.hash(senha, 10);
 
-      const novoUsuario = await prisma.usuarios.create({
-        data: {
+      // FUNÇÃO PARA GERAR NÚMERO DE CONTA ÚNICO
+      const gerarNumeroConta = async (prefixo: string): Promise<string> => {
+        // Buscar todas as contas com o prefixo específico
+        const contasExistentes = await prisma.conta.findMany({
+          where: {
+            numeroConta: {
+              startsWith: prefixo
+            }
+          },
+          select: {
+            numeroConta: true
+          },
+          orderBy: {
+            numeroConta: 'desc'
+          },
+          take: 1
+        });
+
+        let proximoNumero = 1;
+        
+        if (contasExistentes.length > 0) {
+          // Extrair o número da última conta
+          const ultimaConta = contasExistentes[0].numeroConta;
+          const numeroExtraido = ultimaConta.replace(prefixo, '');
+          proximoNumero = parseInt(numeroExtraido, 10) + 1;
+        }
+
+        // Formatar com zeros à esquerda (6 dígitos)
+        const numeroFormatado = proximoNumero.toString().padStart(6, '0');
+        return `${prefixo}${numeroFormatado}`;
+      };
+
+      // Usar transação para garantir consistência
+      const resultado = await prisma.$transaction(async (prisma) => {
+        // Criptografar senha
+        const hashedPassword = await bcrypt.hash(senha, 10);
+
+        // Dados básicos do usuário
+        const dadosUsuario = {
           nome,
           cpf,
           email,
           senha: hashedPassword,
-          imagem,
-          statusConta,
-          reputacao,
+          imagem: imagemPath,
+          statusConta: statusConta === 'true' || statusConta === true,
+          reputacao: parseInt(reputacao) || 0,
           razaoSocial,
           nomeFantasia,
           cnpj,
           inscEstadual,
           inscMunicipal,
-          mostrarNoSite,
+          mostrarNoSite: mostrarNoSite === 'true' || mostrarNoSite === true,
           descricao,
           tipo,
-          tipoDeMoeda,
-          status,
+          tipoDeMoeda: tipoDeMoeda || 'BRL',
+          status: status === 'true' || status === true,
           restricao,
           nomeContato,
           telefone,
@@ -180,24 +268,91 @@ export const criarUsuario = async (req: Request, res: Response) => {
           emailSecundario,
           site,
           logradouro,
-          numero,
+          numero: numero ? parseInt(numero, 10) : null,
           cep,
           complemento,
           bairro,
           cidade,
           estado,
           regiao,
-          aceitaOrcamento,
-          aceitaVoucher,
-          tipoOperacao,
-          categoriaId,
-          subcategoriaId,
-          usuarioCriadorId: parseInt(usuarioCriadorId, 10),
-          matrizId,
-        },
+          aceitaOrcamento: aceitaOrcamento === 'true' || aceitaOrcamento === true,
+          aceitaVoucher: aceitaVoucher === 'true' || aceitaVoucher === true,
+          tipoOperacao: tipoOperacao ? parseInt(tipoOperacao, 10) : null,
+          categoriaId: categoriaId ? parseInt(categoriaId, 10) : null,
+          subcategoriaId: subcategoriaId ? parseInt(subcategoriaId, 10) : null,
+        };
+
+        // Adicionar campos específicos se usuarioCriadorId existir
+        if (usuarioCriadorId) {
+          dadosUsuario.usuarioCriadorId = parseInt(usuarioCriadorId, 10);
+          dadosUsuario.matrizId = matrizId;
+        }
+
+        console.log("💾 Criando usuário...");
+
+        // Criar usuário
+        const novoUsuario = await prisma.usuarios.create({
+          data: dadosUsuario,
+        });
+
+        console.log("✅ Usuário criado:", novoUsuario.idUsuario, novoUsuario.nome);
+
+        // CRIAR CONTA AUTOMATICAMENTE SE FOR GERENTE
+        let novaConta = null;
+        if (tipo === 'Gerente') {
+          console.log("🏦 Criando conta para gerente...");
+
+          // Gerar número único para a conta
+          const numeroConta = await gerarNumeroConta('GER');
+          console.log("🔢 Número da conta gerado:", numeroConta);
+
+          // Dados da conta
+          const dadosConta = {
+            numeroConta: numeroConta,
+            tipoContaId: 11, // Premium (conforme análise)
+            usuarioId: novoUsuario.idUsuario,
+            nomeFranquia: nomeFantasia || nome,
+            limiteCredito: limiteCredito ? parseFloat(limiteCredito.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 0,
+            taxaRepasseMatriz: taxaGerente ? parseInt(taxaGerente, 10) : 0,
+            dataVencimentoFatura: dataVencimentoFatura ? parseInt(dataVencimentoFatura, 10) : 10,
+            diaFechamentoFatura: 25, // Padrão
+            planoId: planoId ? parseInt(planoId, 10) : null,
+            gerenteContaId: usuarioCriadorId ? parseInt(usuarioCriadorId, 10) : null,
+            // Valores padrão
+            limiteUtilizado: 0,
+            saldoPermuta: 0,
+            saldoDinheiro: 0,
+            limiteVendaMensal: 100000, // Padrão
+            limiteVendaTotal: 500000, // Padrão
+            limiteVendaEmpresa: 250000, // Padrão
+            valorVendaMensalAtual: 0,
+            valorVendaTotalAtual: 0,
+            dataDeAfiliacao: new Date(),
+            permissoesEspecificas: JSON.stringify(["ACCOUNT_MANAGEMENT", "REPORT_ACCESS"])
+          };
+
+          novaConta = await prisma.conta.create({
+            data: dadosConta,
+          });
+
+          console.log("✅ Conta criada:", novaConta.idConta, novaConta.numeroConta);
+        }
+
+        return { usuario: novoUsuario, conta: novaConta };
+      });
+
+      // Buscar usuário criado com relacionamentos
+      const usuarioCompleto = await prisma.usuarios.findUnique({
+        where: { idUsuario: resultado.usuario.idUsuario },
         include: {
           categoria: true,
           subcategoria: true,
+          conta: {
+            include: {
+              tipoDaConta: true,
+              plano: true,
+            }
+          },
           matriz: {
             select: {
               nome: true,
@@ -212,154 +367,123 @@ export const criarUsuario = async (req: Request, res: Response) => {
           },
         },
       });
-      const destinatario = email;
-      const assunto = "Bem-vindo à Plataforma RedeTrade!";
-      const corpo = `Olá ${nome}, \n\n
-      Bem-vindo à Plataforma RedeTrade! Agradecemos por escolher nossa plataforma para suas necessidades comerciais.
-      \n\n
-      Acesse sua conta usando as seguintes credenciais:\n
-      E-mail: ${email}\n
-      Senha: ${senha}\n\n
-      Estamos entusiasmados em tê-lo a bordo. Se precisar de assistência ou tiver alguma dúvida, não hesite em entrar em contato conosco.
-      \n\n
-      Atenciosamente,\n
-      Equipe RedeTrade`;
 
-      //await enviarEmail(destinatario, assunto, corpo);
+      // Enviar email de boas-vindas
+      try {
+        const destinatario = email;
+        const assunto = "Bem-vindo à Plataforma RedeTrade!";
+        
+        let tipoUsuario = tipo || 'Usuário';
+        const nomeCompleto = nome || nomeContato || 'Usuário';
+        
+        const corpo = `Olá ${nomeCompleto},
+
+Bem-vindo à Plataforma RedeTrade! Agradecemos por escolher nossa plataforma para suas necessidades comerciais.
+
+Você foi cadastrado como: ${tipoUsuario}
+${resultado.conta ? `Número da conta: ${resultado.conta.numeroConta}` : ''}
+
+Acesse sua conta usando as seguintes credenciais:
+E-mail: ${email}
+Senha: ${senha}
+
+${nomeFantasia ? `Empresa: ${nomeFantasia}` : ''}
+${razaoSocial ? `Razão Social: ${razaoSocial}` : ''}
+
+Estamos entusiasmados em tê-lo a bordo. Se precisar de assistência ou tiver alguma dúvida, não hesite em entrar em contato conosco.
+
+Atenciosamente,
+Equipe RedeTrade`;
+
+        await enviarEmail(destinatario, assunto, corpo);
+        console.log("📧 Email de boas-vindas enviado para:", destinatario);
+        
+      } catch (emailError) {
+        console.error("⚠️ Erro ao enviar email de boas-vindas:", emailError);
+      }
+      
+      console.log("🎉 Criação concluída com sucesso!");
+      
       return res.status(201).json({
-        ...novoUsuario,
-        senha: undefined,
+        ...usuarioCompleto,
+        senha: undefined, // Não retornar a senha na resposta
       });
-    } else {
-      const hashedPassword = await bcrypt.hash(senha, 10);
-
-      const novoUsuario = await prisma.usuarios.create({
-        data: {
-          nome,
-          cpf,
-          email,
-          senha: hashedPassword,
-          imagem,
-          statusConta,
-          reputacao,
-          razaoSocial,
-          nomeFantasia,
-          cnpj,
-          inscEstadual,
-          inscMunicipal,
-          mostrarNoSite,
-          descricao,
-          tipo,
-          tipoDeMoeda,
-          status,
-          restricao,
-          nomeContato,
-          telefone,
-          celular,
-          emailContato,
-          emailSecundario,
-          site,
-          logradouro,
-          numero,
-          cep,
-          complemento,
-          bairro,
-          cidade,
-          estado,
-          regiao,
-          aceitaOrcamento,
-          aceitaVoucher,
-          tipoOperacao,
-          categoriaId,
-          subcategoriaId,
-        },
-        include: {
-          categoria: true,
-          subcategoria: true,
-          matriz: {
-            select: {
-              nome: true,
-              celular: true,
-              email: true,
-              nomeFantasia: true,
-              cnpj: true,
-              inscEstadual: true,
-              inscMunicipal: true,
-              idUsuario: true,
-            },
-          },
-        },
+    } catch (error) {
+      console.error("❌ Erro ao criar usuário:", error);
+      console.error("❌ Stack trace:", error.stack);
+      return res.status(500).json({ 
+        error: "Erro interno do servidor.",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
-         return res.status(201).json({
-           ...novoUsuario,
-           senha: undefined,
-         });
     }
-}
+  }
+];
+
 export const buscarFranquiasPorMatriz = async (req: Request, res: Response) => {
   try {
     const { matrizId } = req.params;
 
     // Buscar todas as franquias e franquias masters pela matriz
-      const franquias = await prisma.usuarios.findMany({
-        where: {
-          usuarioCriadorId: parseInt(matrizId, 10),
-          conta: {
-            tipoDaConta: {
-              tipoDaConta: { in: ["Franquia", "Franquia Master"] },
-            },
+    const franquias = await prisma.usuarios.findMany({
+      where: {
+        usuarioCriadorId: parseInt(matrizId, 10),
+        conta: {
+          tipoDaConta: {
+            tipoDaConta: { in: ["Franquia", "Franquia Master"] },
           },
         },
-        select: {
-          idUsuario: true,
-          usuarioCriadorId: true,
-          matrizId: true,
-          nome: true,
-          cpf: true,
-          email: true,
-          imagem: true,
-          statusConta: true,
-          reputacao: true,
-          razaoSocial: true,
-          nomeFantasia: true,
-          cnpj: true,
-          inscEstadual: true,
-          inscMunicipal: true,
-          mostrarNoSite: true,
-          descricao: true,
-          tipo: true,
-          tipoDeMoeda: true,
-          status: true,
-          restricao: true,
-          nomeContato: true,
-          telefone: true,
-          celular: true,
-          emailContato: true,
-          emailSecundario: true,
-          site: true,
-          logradouro: true,
-          numero: true,
-          cep: true,
-          complemento: true,
-          bairro: true,
-          cidade: true,
-          estado: true,
-          regiao: true,
-          aceitaOrcamento: true,
-          aceitaVoucher: true,
-          tipoOperacao: true,
-          categoriaId: true,
-          subcategoriaId: true,
-          taxaComissaoGerente: true,
-          permissoesDoUsuario: true,
-        },
-      });
+      },
+      select: {
+        idUsuario: true,
+        usuarioCriadorId: true,
+        matrizId: true,
+        nome: true,
+        cpf: true,
+        email: true,
+        imagem: true,
+        statusConta: true,
+        reputacao: true,
+        razaoSocial: true,
+        nomeFantasia: true,
+        cnpj: true,
+        inscEstadual: true,
+        inscMunicipal: true,
+        mostrarNoSite: true,
+        descricao: true,
+        tipo: true,
+        tipoDeMoeda: true,
+        status: true,
+        restricao: true,
+        nomeContato: true,
+        telefone: true,
+        celular: true,
+        emailContato: true,
+        emailSecundario: true,
+        site: true,
+        logradouro: true,
+        numero: true,
+        cep: true,
+        complemento: true,
+        bairro: true,
+        cidade: true,
+        estado: true,
+        regiao: true,
+        aceitaOrcamento: true,
+        aceitaVoucher: true,
+        tipoOperacao: true,
+        categoriaId: true,
+        subcategoriaId: true,
+        taxaComissaoGerente: true,
+        permissoesDoUsuario: true,
+      },
+    });
     return res.status(200).json(franquias);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 };
+
 export const listarUsuariosAssociados = async (req: Request, res: Response) => {
   try {
     const { usuarioCriadorId } = req.params;
@@ -375,9 +499,10 @@ export const listarUsuariosAssociados = async (req: Request, res: Response) => {
       },
     });
 
-    if(usuariosAssociados.length < 1 ){
-        return res.status(404).json({error: "Não foi possível encontrar os associados."});
+    if (usuariosAssociados.length < 1) {
+      return res.status(404).json({ error: "Não foi possível encontrar os associados." });
     }
+    
     // Mapeia os resultados e remove a senha
     const usuariosAssociadosSemSenha = usuariosAssociados.map((usuario) => {
       const { senha, tokenResetSenha, ...usuarioSemSenha } = usuario;
@@ -390,6 +515,7 @@ export const listarUsuariosAssociados = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Erro interno do servidor." });
   }
 };
+
 export async function BuscarUsuariosParams(req: Request, res: Response) {
   try {
     const queryParams = req.query;
@@ -398,29 +524,51 @@ export async function BuscarUsuariosParams(req: Request, res: Response) {
     const pageSize = parseInt(queryParams.pageSize as string) || 10;
     const skip = (page - 1) * pageSize;
 
-    // Adicionar filtros baseados nos query params
+    // Adicionar filtros baseados nos query params - BUSCA PARCIAL MELHORADA
     if (queryParams.nome) {
-      filter["nome"] = queryParams.nome.toString();
+      const searchTerm = queryParams.nome.toString().trim();
+      if (searchTerm) {
+        filter["OR"] = [
+          { nome: { contains: searchTerm, mode: 'insensitive' } },
+          { nomeFantasia: { contains: searchTerm, mode: 'insensitive' } },
+          { email: { contains: searchTerm, mode: 'insensitive' } }
+        ];
+      }
     }
-    if (queryParams.nomeFantasia) {
-      filter["nomeFantasia"] = queryParams.nomeFantasia.toString();
+    
+    // Manter compatibilidade com nomeFantasia separado se necessário
+    if (queryParams.nomeFantasia && !queryParams.nome) {
+      filter["nomeFantasia"] = { contains: queryParams.nomeFantasia.toString(), mode: 'insensitive' };
     }
+    
     if (queryParams.razaoSocial) {
       filter["razaoSocial"] = queryParams.razaoSocial.toString();
     }
+    
     if (queryParams.nomeContato) {
       filter["nomeContato"] = queryParams.nomeContato.toString();
     }
+    
     if (queryParams.estado) {
-      filter["estado"] = queryParams.estado.toString();
+      filter["estado"] = queryParams.estado.toString().trim();
     }
+    
     if (queryParams.cidade) {
-      filter["cidade"] = queryParams.cidade.toString();
+      filter["cidade"] = { contains: queryParams.cidade.toString().trim(), mode: 'insensitive' };
     }
+    
     if (queryParams.usuarioCriadorId) {
       filter["usuarioCriadorId"] = parseInt(
         queryParams.usuarioCriadorId.toString()
       );
+    }
+
+    // NOVOS FILTROS: agência e conta
+    if (queryParams.agencia) {
+      // Vai ser adicionado ao objeto conta mais abaixo
+    }
+    if (queryParams.account) {
+      // Vai ser adicionado ao objeto conta mais abaixo  
     }
 
     // Adicionar filtro de tipo de conta
@@ -430,7 +578,7 @@ export async function BuscarUsuariosParams(req: Request, res: Response) {
           tipoDaConta: queryParams.tipoDaConta.toString(),
         },
         include: {
-          contasAssociadas: true, 
+          contasAssociadas: true,
         },
       });
 
@@ -458,6 +606,16 @@ export async function BuscarUsuariosParams(req: Request, res: Response) {
       }
     }
 
+    // ADICIONAR FILTROS DE AGÊNCIA E CONTA AO OBJETO CONTA
+    if (filter["conta"]) {
+      if (queryParams.agencia) {
+        filter["conta"]["nomeFranquia"] = { contains: queryParams.agencia.toString().trim(), mode: 'insensitive' };
+      }
+      if (queryParams.account) {
+        filter["conta"]["numeroConta"] = { contains: queryParams.account.toString().trim(), mode: 'insensitive' };
+      }
+    }
+
     // Realizar a consulta no banco com paginação
     const [users, totalUsers] = await Promise.all([
       prisma.usuarios.findMany({
@@ -466,8 +624,7 @@ export async function BuscarUsuariosParams(req: Request, res: Response) {
         skip: skip,
         include: {
           usuarioCriador: true,
-          conta: true, 
-          
+          conta: true,
         },
       }),
       prisma.usuarios.count({
@@ -475,27 +632,25 @@ export async function BuscarUsuariosParams(req: Request, res: Response) {
       }),
     ]);
 
-        const totalPages = Math.ceil(totalUsers / pageSize);
-        let nextPage: string | null = null;
+    const totalPages = Math.ceil(totalUsers / pageSize);
+    let nextPage: string | null = null;
 
-        // Verificar se há uma próxima página
-        if (page < totalPages) {
-          const nextPageNumber = page + 1;
-          nextPage = `${req.protocol}://${req.get("host")}${
-            req.baseUrl
-          }?page=${nextPageNumber}&pageSize=${pageSize}`;
-        }
+    // Verificar se há uma próxima página
+    if (page < totalPages) {
+      const nextPageNumber = page + 1;
+      nextPage = `${req.protocol}://${req.get("host")}${req.baseUrl}?page=${nextPageNumber}&pageSize=${pageSize}`;
+    }
 
-        res.json({
-          data: users,
-          meta: {
-            totalResults: totalUsers,
-            totalPages: totalPages,
-            currentPage: page,
-            pageSize: pageSize,
-            nextPage: nextPage,
-          },
-        });
+    res.json({
+      data: users,
+      meta: {
+        totalResults: totalUsers,
+        totalPages: totalPages,
+        currentPage: page,
+        pageSize: pageSize,
+        nextPage: nextPage,
+      },
+    });
   } catch (error) {
     console.error("Erro ao pesquisar usuários:", error);
     res.status(500).json({ error: "Erro ao pesquisar usuários" });

@@ -514,6 +514,258 @@ async function main() {
     }
   });
 
+  console.log('👥 Criando usuários associados...');
+  // Criar tipo de conta "Associado" primeiro
+  const tipoContaAssociado = await prisma.tipoConta.create({
+    data: {
+      tipoDaConta: "Associado",
+      prefixoConta: "ASS",
+      descricao: "Conta de Associado",
+      permissoes: JSON.stringify(["READ", "WRITE", "TRADE"]),
+    },
+  });
+
+  // Criar plano para associados
+  const planoAssociado = await prisma.plano.create({
+    data: {
+      nomePlano: "Plano Associado",
+      tipoDoPlano: "Mensal",
+      taxaInscricao: 50,
+      taxaComissao: 3,
+      taxaManutencaoAnual: 30,
+    },
+  });
+
+  // Criar usuários associados de diferentes agências e estados
+  const associado1 = await prisma.usuarios.create({
+    data: {
+      nome: "João Silva Associado",
+      cpf: "66666666666",
+      email: "joao.associado@example.com",
+      senha: await bcrypt.hash("123456", 10),
+      imagem: "joao_associado.png",
+      statusConta: true,
+      reputacao: 4.2,
+      razaoSocial: "João Silva ME",
+      nomeFantasia: "JS Comércio",
+      cnpj: "66666666000106",
+      inscEstadual: "666666666",
+      inscMunicipal: "666666666",
+      mostrarNoSite: true,
+      descricao: "Comércio de produtos diversos",
+      tipo: "Comércio",
+      tipoDeMoeda: "BRL",
+      status: true,
+      nomeContato: "João Silva",
+      telefone: "11999888777",
+      celular: "11999888777",
+      emailContato: "contato@jscomercio.com",
+      site: "www.jscomercio.com",
+      logradouro: "Rua das Flores",
+      numero: 123,
+      cep: "01234567",
+      bairro: "Centro",
+      cidade: "São Paulo",
+      estado: "SP",
+      regiao: "Sudeste",
+      aceitaOrcamento: true,
+      aceitaVoucher: true,
+      tipoOperacao: 1,
+      categoriaId: categoriaTecnologia.idCategoria,
+      bloqueado: false,
+      permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "TRADE"]),
+      usuarioCriadorId: franquiaA.idUsuario,
+      matrizId: usuarioMatriz.idUsuario,
+    },
+  });
+
+  const associado2 = await prisma.usuarios.create({
+    data: {
+      nome: "Maria Santos Associada",
+      cpf: "77777777777",
+      email: "maria.associada@example.com",
+      senha: await bcrypt.hash("123456", 10),
+      imagem: "maria_associada.png",
+      statusConta: true,
+      reputacao: 4.8,
+      razaoSocial: "Maria Santos LTDA",
+      nomeFantasia: "MS Serviços",
+      cnpj: "77777777000107",
+      inscEstadual: "777777777",
+      inscMunicipal: "777777777",
+      mostrarNoSite: true,
+      descricao: "Prestação de serviços especializados",
+      tipo: "Serviços",
+      tipoDeMoeda: "BRL",
+      status: true,
+      nomeContato: "Maria Santos",
+      telefone: "21888777666",
+      celular: "21888777666",
+      emailContato: "contato@msservicos.com",
+      site: "www.msservicos.com",
+      logradouro: "Avenida Atlântica",
+      numero: 456,
+      cep: "22000000",
+      bairro: "Copacabana",
+      cidade: "Rio de Janeiro",
+      estado: "RJ",
+      regiao: "Sudeste",
+      aceitaOrcamento: true,
+      aceitaVoucher: true,
+      tipoOperacao: 2,
+      categoriaId: categoriaServicos.idCategoria,
+      bloqueado: false,
+      permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "TRADE"]),
+      usuarioCriadorId: franquiaB.idUsuario,
+      matrizId: usuarioMatriz.idUsuario,
+    },
+  });
+
+  const associado3 = await prisma.usuarios.create({
+    data: {
+      nome: "Carlos Oliveira Associado",
+      cpf: "88888888888",
+      email: "carlos.associado@example.com",
+      senha: await bcrypt.hash("123456", 10),
+      imagem: "carlos_associado.png",
+      statusConta: true,
+      reputacao: 3.9,
+      razaoSocial: "Carlos Oliveira EPP",
+      nomeFantasia: "CO Alimentação",
+      cnpj: "88888888000108",
+      inscEstadual: "888888888",
+      inscMunicipal: "888888888",
+      mostrarNoSite: true,
+      descricao: "Setor de alimentação e bebidas",
+      tipo: "Alimentação",
+      tipoDeMoeda: "BRL",
+      status: true,
+      nomeContato: "Carlos Oliveira",
+      telefone: "31777666555",
+      celular: "31777666555",
+      emailContato: "contato@coalimentacao.com",
+      site: "www.coalimentacao.com",
+      logradouro: "Rua da Liberdade",
+      numero: 789,
+      cep: "30000000",
+      bairro: "Savassi",
+      cidade: "Belo Horizonte",
+      estado: "MG",
+      regiao: "Sudeste",
+      aceitaOrcamento: true,
+      aceitaVoucher: true,
+      tipoOperacao: 1,
+      categoriaId: categoriaAlimentos.idCategoria,
+      bloqueado: false,
+      permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "TRADE"]),
+      usuarioCriadorId: gerenteDeConta.idUsuario,
+      matrizId: usuarioMatriz.idUsuario,
+    },
+  });
+
+  // Criar contas para os associados
+  const contaAssociado1 = await prisma.conta.create({
+    data: {
+      taxaRepasseMatriz: 3,
+      limiteCredito: 5000,
+      limiteUtilizado: 1500,
+      limiteDisponivel: 3500,
+      saldoPermuta: 800,
+      saldoDinheiro: 200,
+      limiteVendaMensal: 10000,
+      limiteVendaTotal: 50000,
+      limiteVendaEmpresa: 25000,
+      valorVendaMensalAtual: 3500,
+      valorVendaTotalAtual: 12000,
+      diaFechamentoFatura: 5,
+      dataVencimentoFatura: 15,
+      numeroConta: "ASS000001",
+      dataDeAfiliacao: new Date(),
+      nomeFranquia: "Franquia A",
+      usuario: {
+        connect: { idUsuario: associado1.idUsuario }
+      },
+      tipoDaConta: {
+        connect: { idTipoConta: tipoContaAssociado.idTipoConta }
+      },
+      plano: {
+        connect: { idPlano: planoAssociado.idPlano }
+      },
+      gerenteConta: {
+        connect: { idUsuario: franquiaA.idUsuario }
+      },
+      permissoesEspecificas: JSON.stringify(["ASSOCIATE_ACCESS"]),
+    },
+  });
+
+  const contaAssociado2 = await prisma.conta.create({
+    data: {
+      taxaRepasseMatriz: 3,
+      limiteCredito: 7500,
+      limiteUtilizado: 2200,
+      limiteDisponivel: 5300,
+      saldoPermuta: 1200,
+      saldoDinheiro: 400,
+      limiteVendaMensal: 15000,
+      limiteVendaTotal: 75000,
+      limiteVendaEmpresa: 37500,
+      valorVendaMensalAtual: 5200,
+      valorVendaTotalAtual: 18000,
+      diaFechamentoFatura: 10,
+      dataVencimentoFatura: 20,
+      numeroConta: "ASS000002",
+      dataDeAfiliacao: new Date(),
+      nomeFranquia: "Franquia B",
+      usuario: {
+        connect: { idUsuario: associado2.idUsuario }
+      },
+      tipoDaConta: {
+        connect: { idTipoConta: tipoContaAssociado.idTipoConta }
+      },
+      plano: {
+        connect: { idPlano: planoAssociado.idPlano }
+      },
+      gerenteConta: {
+        connect: { idUsuario: franquiaB.idUsuario }
+      },
+      permissoesEspecificas: JSON.stringify(["ASSOCIATE_ACCESS"]),
+    },
+  });
+
+  const contaAssociado3 = await prisma.conta.create({
+    data: {
+      taxaRepasseMatriz: 3,
+      limiteCredito: 6000,
+      limiteUtilizado: 1800,
+      limiteDisponivel: 4200,
+      saldoPermuta: 950,
+      saldoDinheiro: 300,
+      limiteVendaMensal: 12000,
+      limiteVendaTotal: 60000,
+      limiteVendaEmpresa: 30000,
+      valorVendaMensalAtual: 4100,
+      valorVendaTotalAtual: 15000,
+      diaFechamentoFatura: 15,
+      dataVencimentoFatura: 25,
+      numeroConta: "ASS000003",
+      dataDeAfiliacao: new Date(),
+      nomeFranquia: "Franquia Y",
+      usuario: {
+        connect: { idUsuario: associado3.idUsuario }
+      },
+      tipoDaConta: {
+        connect: { idTipoConta: tipoContaAssociado.idTipoConta }
+      },
+      plano: {
+        connect: { idPlano: planoAssociado.idPlano }
+      },
+      gerenteConta: {
+        connect: { idUsuario: gerenteDeConta.idUsuario }
+      },
+      permissoesEspecificas: JSON.stringify(["ASSOCIATE_ACCESS"]),
+    },
+  });
+
   console.log('✅ Seeds executados com sucesso!');
   console.log('');
   console.log('👤 Usuários criados:');
@@ -523,16 +775,23 @@ async function main() {
   console.log('📧 Franquia A: franquia.a@example.com | 🔑 Senha: senha101');
   console.log('📧 Franquia B: franquia.b@example.com | 🔑 Senha: senha102');
   console.log('');
-  console.log('🏦 Contas criadas com números: BSC000001, PRM000001, MTZ000001, FRQ000001, FRQ000002');
+  console.log('👥 Associados criados:');
+  console.log('📧 João Silva: joao.associado@example.com | 🔑 Senha: 123456 | 🏢 Franquia A | 📍 São Paulo/SP');
+  console.log('📧 Maria Santos: maria.associada@example.com | 🔑 Senha: 123456 | 🏢 Franquia B | 📍 Rio de Janeiro/RJ');
+  console.log('📧 Carlos Oliveira: carlos.associado@example.com | 🔑 Senha: 123456 | 🏢 Gerente Conta | 📍 Belo Horizonte/MG');
+  console.log('');
+  console.log('🏦 Contas criadas: BSC000001, PRM000001, MTZ000001, FRQ000001, FRQ000002, ASS000001, ASS000002, ASS000003');
   console.log('');
   console.log('🛍️ Ofertas criadas: 2 ofertas de exemplo');
 
   return {
-    usuarios: { usuarioComum, gerenteDeConta, usuarioMatriz, franquiaA, franquiaB },
-    contas: { contaUsuarioComum, contaGerente, contaMatriz, contaFranquiaA, contaFranquiaB },
+    usuarios: { usuarioComum, gerenteDeConta, usuarioMatriz, franquiaA, franquiaB, associado1, associado2, associado3 },
+    contas: { contaUsuarioComum, contaGerente, contaMatriz, contaFranquiaA, contaFranquiaB, contaAssociado1, contaAssociado2, contaAssociado3 },
     categorias: { categoriaTecnologia, categoriaServicos, categoriaAlimentos },
     subcategorias: { subcategoriaHardware, subcategoriaSoftware, subcategoriaConsultoria, subcategoriaRestaurante },
-    ofertas: { oferta1, oferta2 }
+    ofertas: { oferta1, oferta2 },
+    tiposContas: { tipoContaAssociado },
+    planos: { planoAssociado }
   };
 }
 

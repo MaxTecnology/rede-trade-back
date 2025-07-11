@@ -10,7 +10,6 @@ import {
 import { criarConta } from "../controllers/account.controller";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
-import { upload } from "../middlewares/upload"; // Importar o middleware de upload
 
 const accountRouter = Router();
 const prisma = new PrismaClient();
@@ -37,7 +36,6 @@ accountRouter.post(
     }
   }
 );
-
 // R - Rota para listar todos os tipos de conta
 accountRouter.get(
   "/listar-tipos-de-conta",
@@ -55,7 +53,6 @@ accountRouter.get(
     }
   }
 );
-
 // U -  Rota para atualizar um tipo de conta pelo ID
 accountRouter.put(
   "/atualizar-tipo-de-conta/:id",
@@ -83,7 +80,6 @@ accountRouter.put(
     }
   }
 );
-
 // D-  Rota para deletar um tipo de conta pelo ID
 accountRouter.delete(
   "/deletar-tipo-de-conta/:id",
@@ -201,7 +197,6 @@ accountRouter.get("/listar-contas", async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Erro interno do servidor." });
   }
 });
-
 // Rota para buscar uma conta pelo ID
 accountRouter.get(
   "/buscar-conta-por-id/:id",
@@ -265,7 +260,6 @@ accountRouter.get(
     }
   }
 );
-
 // Rota para buscar uma conta pelo número da conta
 accountRouter.get(
   "/buscar-conta-por-numero/:numeroConta",
@@ -331,7 +325,6 @@ accountRouter.get(
     }
   }
 );
-
 // Rota para atualizar dados de uma conta
 accountRouter.put(
   "/atualizar-conta/:id",
@@ -403,7 +396,6 @@ accountRouter.put(
     }
   }
 );
-
 // Rota para deletar uma conta
 accountRouter.delete(
   "/deletar-conta/:id",
@@ -484,7 +476,6 @@ accountRouter.post(
     }
   }
 );
-
 // Rota para remover o gerente de uma conta
 accountRouter.put(
   "/remover-gerente/:idConta",
@@ -508,7 +499,6 @@ accountRouter.put(
     }
   }
 );
-
 // Rota para listar contas gerenciadas por um usuário
 accountRouter.get(
   "/contas-gerenciadas/:idUsuario",
@@ -548,10 +538,9 @@ accountRouter.get(
   }
 );
 
-// Rota para criar uma subconta para a conta pai - ATUALIZADA COM UPLOAD
+// Rota para criar uma subconta para a conta pai
 accountRouter.post(
   "/criar-subconta/:idContaPai",
-  upload.single('imagem'), // Middleware de upload adicionado
   verifyToken,
   checkBlocked,
   async (req: Request, res: Response) => {
@@ -562,6 +551,7 @@ accountRouter.post(
         email,
         cpf,
         senha,
+        imagem,
         statusConta,
         reputacao,
         telefone,
@@ -575,13 +565,6 @@ accountRouter.post(
         cidade,
         estado,
       } = req.body;
-
-      // Verificar se tem imagem enviada e definir o caminho
-      let imagemPath = null;
-      if (req.file) {
-        imagemPath = `/uploads/images/${req.file.filename}`;
-        console.log("📸 Imagem da subconta enviada:", req.file.filename);
-      }
 
       // Verificar se o email já existe em usuários ou subcontas
       const existingEmail = await prisma.usuarios.findUnique({
@@ -658,7 +641,7 @@ accountRouter.post(
           nome,
           email,
           cpf,
-          imagem: imagemPath, // Usar o caminho da imagem ou null se não houver
+          imagem,
           statusConta,
           reputacao,
           emailContato,
@@ -700,17 +683,14 @@ accountRouter.post(
       // Desestruture a subconta, omitindo a senha
       const { senha: senhaSubConta, ...subContaSemSenha } = novaSubConta;
 
-      console.log("✅ Subconta criada com sucesso:", novaSubConta.nome);
-
       // Retorne a subconta sem a senha
       return res.status(201).json(subContaSemSenha);
     } catch (error) {
-      console.error("❌ Erro ao criar subconta:", error);
+      console.error(error);
       return res.status(500).json({ error: "Erro interno do servidor." });
     }
   }
 );
-
 // Rota para deletar uma subconta
 accountRouter.delete(
   "/deletar-subconta/:idSubConta",
@@ -743,7 +723,6 @@ accountRouter.delete(
     }
   }
 );
-
 // Rota para listar todas as subcontas com suporte a paginação
 accountRouter.get(
   "/listar-subcontas/:idContaPai",
@@ -817,7 +796,6 @@ accountRouter.get(
     }
   }
 );
-
 // Rota para buscar uma subconta pelo ID
 accountRouter.get(
   "/buscar-subconta/:idSubConta",
@@ -866,11 +844,9 @@ accountRouter.get(
     }
   }
 );
-
-// Rota para atualizar os dados de uma subconta - ATUALIZADA COM UPLOAD
+// Rota para atualizar os dados de uma subconta
 accountRouter.patch(
   "/atualizar-subconta/:idSubConta",
-  upload.single('imagem'), // Middleware de upload adicionado
   verifyToken,
   checkBlocked,
   async (req: Request, res: Response) => {
@@ -880,6 +856,7 @@ accountRouter.patch(
         nome,
         email,
         cpf,
+        imagem,
         telefone,
         celular,
         logradouro,
@@ -891,29 +868,6 @@ accountRouter.patch(
         estado,
         reputacao, // Adicione os campos que você deseja permitir a atualização
       } = req.body;
-
-      // Verificar se tem nova imagem enviada
-      let dadosAtualizacao: any = {
-        nome,
-        email,
-        cpf,
-        telefone,
-        celular,
-        logradouro,
-        numero,
-        cep,
-        complemento,
-        bairro,
-        cidade,
-        estado,
-        reputacao,
-      };
-
-      // Se uma nova imagem foi enviada, adicionar ao objeto de atualização
-      if (req.file) {
-        dadosAtualizacao.imagem = `/uploads/images/${req.file.filename}`;
-        console.log("📸 Nova imagem da subconta enviada:", req.file.filename);
-      }
 
       // Verificar se a subconta existe
       const subConta = await prisma.subContas.findUnique({
@@ -927,18 +881,32 @@ accountRouter.patch(
       // Atualizar os dados da subconta
       const subContaAtualizada = await prisma.subContas.update({
         where: { idSubContas: parseInt(idSubConta, 10) },
-        data: dadosAtualizacao,
+        data: {
+          nome,
+          email,
+          cpf,
+          imagem,
+          telefone,
+          celular,
+          logradouro,
+          numero,
+          cep,
+          complemento,
+          bairro,
+          cidade,
+          estado,
+          reputacao,
+          // Adicione outros campos que você deseja permitir a atualização
+        },
       });
 
       // Omitir a senha da subconta atualizada
       const { senha, ...subContaSemSenha } = subContaAtualizada;
 
-      console.log("✅ Subconta atualizada com sucesso:", subContaAtualizada.nome);
-
       // Retornar a subconta atualizada
       return res.status(200).json(subContaSemSenha);
     } catch (error) {
-      console.error("❌ Erro ao atualizar subconta:", error);
+      console.error(error);
       return res.status(500).json({ error: "Erro interno do servidor." });
     }
   }
@@ -1074,7 +1042,6 @@ accountRouter.post(
     }
   }
 );
-
 //Rota para deletar uma permissão
 accountRouter.delete(
   "/subcontas/remover-permissoes/:idSubConta",
@@ -1123,7 +1090,6 @@ accountRouter.delete(
     }
   }
 );
-
 //Rota que lista permissoes de uma subconta
 accountRouter.get(
   "/subcontas/permissoes/:idSubConta",
@@ -1150,7 +1116,6 @@ accountRouter.get(
     }
   }
 );
-
 //Rota para atualizar permissoes de uma subconta
 accountRouter.put(
   "/subcontas/atualizar-permissoes/:idSubConta",
@@ -1354,7 +1319,6 @@ accountRouter.put(
     }
   }
 );
-
 // Rota para adicionar limite de crédito e gerar cobrança instantânea
 accountRouter.post(
   "/pagamento-do-plano/:idUsuario",
@@ -1444,5 +1408,6 @@ accountRouter.post(
     }
   }
 );
+
 
 export default accountRouter;
