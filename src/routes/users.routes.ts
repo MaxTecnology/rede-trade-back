@@ -1,6 +1,5 @@
 // routes/users.routes.ts
 import { Request, Response, Router } from "express";
-import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import { enviarEmail, gerarToken } from "../utils/utils";
 import * as jwt from "jsonwebtoken";
@@ -15,8 +14,7 @@ import {
 } from "../controllers/users.controller";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { upload } from "../middlewares/upload"; // Importar o middleware de upload
-
-const prisma = new PrismaClient();
+import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 
 const userRouter = Router();
 

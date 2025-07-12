@@ -1,11 +1,9 @@
-import { PrismaClient } from "@prisma/client";
 import { Router, Request, Response } from "express";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
+import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 
 const creditRouter = Router();
-
-const prisma = new PrismaClient();
 // Rota para o usuário solicitar crédito
 creditRouter.post(
   "/solicitar",

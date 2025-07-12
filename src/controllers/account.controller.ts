@@ -1,7 +1,6 @@
 // accountController.ts
-import { PrismaClient } from "@prisma/client";
 import { Request, Response } from "express";
-const prisma = new PrismaClient();
+import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 
 export const criarConta = async (req: Request, res: Response) => {
   try {

@@ -1,10 +1,8 @@
 // categories.routes.ts
 import  { Request, Response, Router } from "express";
-import { PrismaClient } from "@prisma/client";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
-
-const prisma = new PrismaClient();
+import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 const categoryRouter = Router();
 
 // Rota para cadastrar uma nova categoria

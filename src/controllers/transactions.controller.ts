@@ -1,8 +1,7 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
 import { ContaInfo, obterContaInfo } from "../utils/transactions.utils";
 import { enviarEmailTransacao } from "../utils/utils";
-const prisma = new PrismaClient();
+import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 
 export const insertTransaction = async (req: Request, res: Response) => {
   try {

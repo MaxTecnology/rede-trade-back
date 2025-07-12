@@ -1,7 +1,5 @@
-import { PrismaClient } from "@prisma/client";
 import { Request, Response, Router } from "express";
-
-const prisma = new PrismaClient();
+import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 const voucherRouters = Router();
 
 voucherRouters.get("/vouchers-do-usuario/:idUsuario", async (req: Request, res: Response) => {

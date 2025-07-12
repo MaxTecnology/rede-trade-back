@@ -1,10 +1,8 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import { enviarEmail } from "../utils/utils";
 import { upload } from "../middlewares/upload";
-
-const prisma = new PrismaClient();
+import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 
 interface FilterParams {
   [key: string]: any;

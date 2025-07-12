@@ -1,10 +1,8 @@
 // billing.routes.ts
 import { Request, Response, Router } from "express";
-import { PrismaClient } from "@prisma/client";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
-
-const prisma = new PrismaClient();
+import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 const billingRouter = Router();
 
 // Rota para criar uma cobrança associada a uma transação

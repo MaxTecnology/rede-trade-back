@@ -1,5 +1,4 @@
 // routes/account.routes.ts
-import { PrismaClient } from "@prisma/client";
 import { Router, Request, Response } from "express";
 import bcrypt from "bcrypt";
 import {
@@ -11,9 +10,9 @@ import { criarConta } from "../controllers/account.controller";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { upload } from "../middlewares/upload"; // Importar o middleware de upload
+import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 
 const accountRouter = Router();
-const prisma = new PrismaClient();
 
 // C -  Rota para criar  tipos de conta
 accountRouter.post(

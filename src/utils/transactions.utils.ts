@@ -1,8 +1,6 @@
 // transactions.utils.ts
 
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 
 export interface ContaInfo {
   idConta: number;

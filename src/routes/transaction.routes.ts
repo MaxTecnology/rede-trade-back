@@ -1,6 +1,5 @@
 // transaction.routes.ts
 import { Request, Response, Router } from "express";
-import { PrismaClient } from "@prisma/client";
 import * as QRCode from "qrcode";
 import fs from "fs";
 import path from "path";
@@ -9,8 +8,7 @@ import { encaminharEstorno, encaminharSolicitacaoEstornoMatriz, estornarTransaca
 import { enviarEmail } from "../utils/utils";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
-
-const prisma = new PrismaClient();
+import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 const transactionRouter = Router();
 
 // Rota para cadastrar uma nova transação

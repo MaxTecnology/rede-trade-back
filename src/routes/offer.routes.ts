@@ -1,11 +1,9 @@
 // offer.routes.ts
 import { Request, Response, Router } from "express";
-import { PrismaClient } from "@prisma/client";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
 import { upload } from "../middlewares/upload"; // Importar o middleware de upload
-
-const prisma = new PrismaClient();
+import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 const offerRouter = Router();
 
 // Rota para upload de imagem separada
@@ -115,7 +113,15 @@ offerRouter.post(
 offerRouter.get('/listar-ofertas', verifyToken, async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId; // Do middleware verifyToken
-    const { page = 1, limit = 10 } = req.query;
+    const { 
+      page = 1, 
+      limit = 10,
+      titulo,
+      cidade,
+      nomeCategoria,
+      tipo,
+      agencia
+    } = req.query;
 
     console.log('🔍 Usuário solicitando ofertas:', userId);
 
@@ -205,9 +211,59 @@ offerRouter.get('/listar-ofertas', verifyToken, async (req: Request, res: Respon
       };
     }
 
+    // Adicionar filtros de busca específicos das ofertas
+    let filtrosOferta = {};
+
+    // Filtro por título
+    if (titulo) {
+      filtrosOferta.titulo = {
+        contains: titulo.toString(),
+        mode: 'insensitive'
+      };
+    }
+
+    // Filtro por cidade
+    if (cidade) {
+      filtrosOferta.cidade = {
+        contains: cidade.toString(),
+        mode: 'insensitive'
+      };
+    }
+
+    // Filtro por tipo
+    if (tipo) {
+      filtrosOferta.tipo = {
+        contains: tipo.toString(),
+        mode: 'insensitive'
+      };
+    }
+
+    // Filtro por categoria (nome da categoria)
+    if (nomeCategoria) {
+      filtrosOferta.categoria = {
+        nomeCategoria: {
+          contains: nomeCategoria.toString(),
+          mode: 'insensitive'
+        }
+      };
+    }
+
+    // Filtro por agência (nomeFranquia do usuário)
+    if (agencia) {
+      filtrosOferta.usuario = {
+        nomeFantasia: {
+          contains: agencia.toString(),
+          mode: 'insensitive'
+        }
+      };
+    }
+
+    console.log('🔍 Filtros de oferta aplicados:', filtrosOferta);
+
     // Adicionar filtro para ofertas ativas no backend (melhor performance)
     const whereClauseComStatus = {
       ...whereClause,
+      ...filtrosOferta,
       status: true, // Apenas ofertas ativas
       vencimento: {
         gt: new Date() // Apenas ofertas não vencidas

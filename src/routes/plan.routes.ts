@@ -1,11 +1,9 @@
-import { PrismaClient } from "@prisma/client";
 import { Request, Response, Router } from "express";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
-
+import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 
 const planRouter = Router();
-const prisma = new PrismaClient();
 
 // Rota para criar um novo plano
 planRouter.post(

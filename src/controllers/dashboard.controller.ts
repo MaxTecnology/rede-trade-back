@@ -1,9 +1,8 @@
 // dashboard.controller.ts
 
 import { Request, Response } from "express";
-import { PrismaClient, Transacao } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { Transacao } from "@prisma/client";
+import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 
 export const getTotalValorRT = async (req: Request, res: Response) => {
   try {
