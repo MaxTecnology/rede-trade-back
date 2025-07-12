@@ -14,6 +14,7 @@ import {
 } from "../controllers/users.controller";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { upload } from "../middlewares/upload"; // Importar o middleware de upload
+import { authRateLimit, apiRateLimit } from "../middlewares/rateLimit.middleware"; // Rate limiting
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 
 const userRouter = Router();
@@ -23,12 +24,13 @@ userRouter.post('/upload-imagem', upload.single('image'), uploadImagem);
 
 // Rota para criar um usuário com upload de imagem
 userRouter.post("/criar-usuario", 
+  authRateLimit, // Rate limiting para criação de usuários
   /*verifyToken, checkBlocked, */
   criarUsuario // A função criarUsuario já tem o middleware de upload internamente
 );
 
 // Rota para listar todos os usuários com paginação
-userRouter.get('/listar-usuarios', async (req: Request, res: Response) => {
+userRouter.get('/listar-usuarios', apiRateLimit, async (req: Request, res: Response) => {
   try {
     const { 
       page = 1, 
@@ -101,9 +103,9 @@ userRouter.get('/listar-usuarios', async (req: Request, res: Response) => {
     }
 
     console.log('📊 Filtros aplicados (whereClause):', JSON.stringify(whereClause, null, 2));
-    console.log('🔍 Parâmetro de busca específico:', { search, searchType: typeof search, searchTrimmed: search?.trim?.() });
+    console.log('🔍 Parâmetro de busca específico:', { search, searchType: typeof search, searchTrimmed: typeof search === 'string' ? search.trim() : '' });
 
-    // Buscar os usuários com os relacionamentos desejados e aplicar a paginação + filtros
+    // Buscar os usuários com os relacionamentos desejados e aplicar a paginação + filtros - OTIMIZADO
     const usuarios = await prisma.usuarios.findMany({
       where: whereClause,
       include: {
@@ -127,11 +129,7 @@ userRouter.get('/listar-usuarios', async (req: Request, res: Response) => {
         },
         categoria: true,
         subcategoria: true,
-        contasGerenciadas: true,
-        ofertas: true,
-        transacoesComprador: true,
-        transacoesVendedor: true,
-        cobrancas: true,
+        // Removidos relacionamentos pesados: contasGerenciadas, ofertas, transacoesComprador, transacoesVendedor, cobrancas
       },
       skip,
       take: pageSizeNumber,

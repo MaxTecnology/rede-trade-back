@@ -3,6 +3,7 @@ import { Request, Response, Router } from "express";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
 import { upload } from "../middlewares/upload"; // Importar o middleware de upload
+import { apiRateLimit, strictRateLimit } from "../middlewares/rateLimit.middleware"; // Rate limiting
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 const offerRouter = Router();
 
@@ -30,6 +31,7 @@ offerRouter.post('/upload-imagem', upload.single('image'), async (req: Request, 
 // Rota para cadastrar uma nova oferta - ATUALIZADA COM UPLOAD
 offerRouter.post(
   "/criar-oferta",
+  strictRateLimit, // Rate limiting para criação de ofertas
   upload.single('imagem'), // Middleware de upload adicionado
   verifyToken,
   checkBlocked,
@@ -110,7 +112,7 @@ offerRouter.post(
 );
 
 // Rota para listar ofertas com filtros hierárquicos
-offerRouter.get('/listar-ofertas', verifyToken, async (req: Request, res: Response) => {
+offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Request, res: Response) => {
   try {
     const userId = res.locals.userId; // Do middleware verifyToken
     const { 
@@ -276,14 +278,28 @@ offerRouter.get('/listar-ofertas', verifyToken, async (req: Request, res: Respon
       where: whereClauseComStatus,
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
-      include: {
-        categoria: true,
+      select: {
+        idOferta: true,
+        titulo: true,
+        tipo: true,
+        descricao: true,
+        quantidade: true,
+        valor: true,
+        vencimento: true,
+        cidade: true,
+        estado: true,
+        imagens: true,
+        createdAt: true,
+        categoria: {
+          select: {
+            idCategoria: true,
+            nomeCategoria: true,
+          },
+        },
         usuario: {
           select: {
             idUsuario: true,
             nome: true,
-            email: true,
-            telefone: true,
             tipo: true,
           },
         },
@@ -291,8 +307,6 @@ offerRouter.get('/listar-ofertas', verifyToken, async (req: Request, res: Respon
           select: {
             idSubContas: true,
             nome: true,
-            email: true,
-            telefone: true,
           },
         },
       },
@@ -488,7 +502,12 @@ offerRouter.get('/buscar-oferta/:ofertaId', async (req: Request, res: Response) 
     const oferta = await prisma.oferta.findUnique({
       where: { idOferta: ofertaId },
       include: {
-        categoria: true,
+        categoria: {
+          select: {
+            idCategoria: true,
+            nomeCategoria: true,
+          },
+        },
         usuario: {
           select: {
             idUsuario: true,
@@ -505,7 +524,21 @@ offerRouter.get('/buscar-oferta/:ofertaId', async (req: Request, res: Response) 
             telefone: true,
           },
         },
-        transacoes: true,
+        transacoes: {
+          select: {
+            idTransacao: true,
+            codigoTransacao: true,
+            valorRt: true,
+            status: true,
+            createdAt: true,
+            nomeComprador: true,
+            nomeVendedor: true,
+          },
+          take: 50, // Limitar transações para evitar sobrecarga
+          orderBy: {
+            createdAt: 'desc'
+          }
+        },
       },
     });
 

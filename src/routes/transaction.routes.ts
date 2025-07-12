@@ -8,11 +8,12 @@ import { encaminharEstorno, encaminharSolicitacaoEstornoMatriz, estornarTransaca
 import { enviarEmail } from "../utils/utils";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
+import { strictRateLimit } from "../middlewares/rateLimit.middleware"; // Rate limiting
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 const transactionRouter = Router();
 
 // Rota para cadastrar uma nova transação
-transactionRouter.post("/inserir-transacao",   verifyToken,
+transactionRouter.post("/inserir-transacao", strictRateLimit, verifyToken,
   checkBlocked,insertTransaction);
 transactionRouter.post("/encaminhar-estorno/:idTransacao",  verifyToken,
   checkBlocked, encaminharEstorno);

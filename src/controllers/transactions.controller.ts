@@ -33,14 +33,15 @@ export const insertTransaction = async (req: Request, res: Response) => {
         .json({ error: "Comprador ou vendedor não encontrado" });
     }
 
-    const transacoesVendedor = await prisma.transacao.findMany({
+    // Otimização: usar aggregate em vez de findMany + reduce
+    const resultadoAggregate = await prisma.transacao.aggregate({
       where: { vendedorId },
+      _sum: {
+        valorRt: true,
+      },
     });
 
-    const totalTransacoesVendedor = transacoesVendedor.reduce(
-      (total, transacao) => total + transacao.valorRt,
-      0
-    );
+    const totalTransacoesVendedor = resultadoAggregate._sum.valorRt || 0;
 
     if (totalTransacoesVendedor + valorRt > contaVendedor.limiteVendaEmpresa) {
       return res
@@ -294,7 +295,7 @@ export const visualizarTransacoesEstorno = async (
   try {
     const { idFranquia } = req.params;
 
-    // Busque todas as transações com status "Encaminhada para estorno"
+    // Busque transações com status "Encaminhada para estorno" - OTIMIZADO
     const transacoes = await prisma.transacao.findMany({
       where: {
         OR: [
@@ -311,10 +312,31 @@ export const visualizarTransacoesEstorno = async (
         ],
         status: "Encaminhada para estorno",
       },
-      include: {
-        voucher: true,
-        cobrancas: true,
+      select: {
+        idTransacao: true,
+        valorRt: true,
+        status: true,
+        createdAt: true,
+        nomeComprador: true,
+        nomeVendedor: true,
+        voucher: {
+          select: {
+            idVoucher: true,
+            status: true,
+          }
+        },
+        cobrancas: {
+          select: {
+            idCobranca: true,
+            status: true,
+          },
+          take: 10, // Limitar cobranças por transação
+        },
       },
+      take: 200, // Limitar resultados para performance
+      orderBy: {
+        createdAt: 'desc'
+      }
     });
 
     return res.status(200).json({ "Solicitações de estorno": transacoes });
@@ -522,9 +544,25 @@ export const listarTransacoesEstornadas = async (
       where: {
         status: "Estornada",
       },
-      include: {
-        voucher: true,
+      select: {
+        idTransacao: true,
+        valorRt: true,
+        status: true,
+        createdAt: true,
+        dataDoEstorno: true,
+        nomeComprador: true,
+        nomeVendedor: true,
+        voucher: {
+          select: {
+            idVoucher: true,
+            status: true,
+          }
+        },
       },
+      take: 1000, // Limitar resultados para performance
+      orderBy: {
+        dataDoEstorno: 'desc'
+      }
     });
     return res.status(200).json({ transacoesEstornadas });
   } catch (error) {
@@ -567,7 +605,7 @@ export const listarTransacoesEstornadasPorAgencia = async (
         .json({ error: "Usuário criador não é uma franquia válida." });
     }
 
-    // Busque todas as transações estornadas da agência e seus associados
+    // Busque transações estornadas da agência e seus associados - OTIMIZADO
     const transacoesEstornadas = await prisma.transacao.findMany({
       where: {
         status: "Estornada",
@@ -576,9 +614,24 @@ export const listarTransacoesEstornadasPorAgencia = async (
           { vendedor: { usuarioCriadorId: parseInt(agenciaId, 10) } },
         ],
       },
-      include: {
-        voucher: true,
+      select: {
+        idTransacao: true,
+        valorRt: true,
+        status: true,
+        createdAt: true,
+        nomeComprador: true,
+        nomeVendedor: true,
+        voucher: {
+          select: {
+            idVoucher: true,
+            status: true,
+          }
+        },
       },
+      take: 500, // Limitar resultados para performance
+      orderBy: {
+        createdAt: 'desc'
+      }
     });
 
     return res.status(200).json({ transacoesEstornadas });
