@@ -331,104 +331,6 @@ userRouter.get('/buscar-usuario/:id', async (req: Request, res: Response) => {
 });
 
 // Rota para atualizar dados de um usuário
-userRouter.get('/listar-gerentes', async (req: Request, res: Response) => {
-  try {
-    const { 
-      page = 1, 
-      pageSize = 60,
-      search,
-      estado,
-      cidade 
-    } = req.query;
-    
-    const pageNumber = Math.max(1, parseInt(page as string, 10) || 1);
-    const pageSizeNumber = Math.min(100, Math.max(1, parseInt(pageSize as string, 10) || 60));
-    const skip = (pageNumber - 1) * pageSizeNumber;
-
-    // Filtros para gerentes
-    const whereClause: any = {
-      tipo: "Gerente"
-    };
-
-    // Filtro de busca
-    if (search && typeof search === 'string' && search.trim()) {
-      whereClause.OR = [
-        { nome: { contains: search.trim(), mode: 'insensitive' } },
-        { nomeFantasia: { contains: search.trim(), mode: 'insensitive' } },
-        { email: { contains: search.trim(), mode: 'insensitive' } }
-      ];
-    }
-
-    // Filtros adicionais
-    if (estado && typeof estado === 'string' && estado.trim()) {
-      whereClause.estado = estado.trim();
-    }
-
-    if (cidade && typeof cidade === 'string' && cidade.trim()) {
-      whereClause.cidade = { contains: cidade.trim(), mode: 'insensitive' };
-    }
-
-    // Buscar gerentes
-    const gerentes = await prisma.usuarios.findMany({
-      where: whereClause,
-      include: {
-        conta: {
-          include: {
-            tipoDaConta: true,
-            plano: true,
-          }
-        },
-        categoria: true,
-        subcategoria: true,
-        matriz: {
-          select: {
-            nome: true,
-            nomeFantasia: true,
-            idUsuario: true,
-          }
-        },
-        usuarioCriador: {
-          select: {
-            nome: true,
-            nomeFantasia: true,
-            idUsuario: true,
-          }
-        }
-      },
-      skip,
-      take: pageSizeNumber,
-      orderBy: { nome: 'asc' }
-    });
-
-    // Contar total
-    const totalGerentes = await prisma.usuarios.count({ where: whereClause });
-
-    // Remover dados sensíveis
-    const gerentesSemSenha = gerentes.map((gerente) => ({
-      ...gerente,
-      senha: undefined,
-      tokenResetSenha: undefined
-    }));
-
-    return res.status(200).json({
-      data: gerentesSemSenha,
-      meta: {
-        page: pageNumber,
-        pageSize: pageSizeNumber,
-        total: totalGerentes,
-        totalPages: Math.ceil(totalGerentes / pageSizeNumber),
-        hasNext: pageNumber < Math.ceil(totalGerentes / pageSizeNumber),
-        hasPrev: pageNumber > 1
-      }
-    });
-  } catch (error) {
-    console.error('❌ Erro ao listar gerentes:', error);
-    return res.status(500).json({ 
-      error: 'Erro interno do servidor.',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
 
 // Rota para atualizar usuário completo - VERSÃO LIMPA
 
@@ -491,6 +393,9 @@ userRouter.put("/atualizar-usuario-completo/:id",
         if (key === 'taxaGerente') {
           // MAPEAMENTO: taxaGerente -> taxaComissaoGerente (tabela Usuarios)
           dadosUsuario['taxaComissaoGerente'] = dadosRecebidos[key];
+        } else if (key === 'gerente') {
+          // MAPEAMENTO: gerente -> gerenteContaId (tabela Conta)
+          dadosConta['gerenteContaId'] = dadosRecebidos[key];
         } else if (camposUsuario.includes(key)) {
           dadosUsuario[key] = dadosRecebidos[key];
         } else if (camposConta.includes(key)) {

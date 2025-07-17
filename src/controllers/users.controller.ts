@@ -110,7 +110,8 @@ export const criarUsuario = [
         limiteCredito,
         taxaGerente,
         dataVencimentoFatura,
-        planoId
+        planoId,
+        gerente
       } = req.body;
 
       // Verificar se tem imagem enviada e definir o caminho
@@ -389,7 +390,7 @@ export const criarUsuario = [
             dataVencimentoFatura: 10, // Padrão
             diaFechamentoFatura: 25, // Padrão
             planoId: planoId ? parseInt(planoId, 10) : 1, // Plano básico como padrão
-            gerenteContaId: usuarioCriadorId ? parseInt(usuarioCriadorId, 10) : null,
+            gerenteContaId: gerente ? parseInt(gerente, 10) : null,
             // Valores padrão para associados
             limiteUtilizado: 0,
             saldoPermuta: 0,

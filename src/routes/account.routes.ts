@@ -575,6 +575,17 @@ accountRouter.post(
         estado,
       } = req.body;
 
+      // Converter tipos de dados que vêm como string do FormData
+      const statusContaBoolean = statusConta === 'true' || statusConta === true;
+      const reputacaoNumber = parseFloat(reputacao) || 0;
+      const numeroNumber = numero ? parseInt(numero, 10) : null;
+
+      console.log("🔧 Conversão de tipos:", {
+        statusConta: `"${statusConta}" -> ${statusContaBoolean}`,
+        reputacao: `"${reputacao}" -> ${reputacaoNumber}`,
+        numero: `"${numero}" -> ${numeroNumber}`
+      });
+
       // Verificar se tem imagem enviada e definir o caminho
       let imagemPath = null;
       if (req.file) {
@@ -658,8 +669,8 @@ accountRouter.post(
           email,
           cpf,
           imagem: imagemPath, // Usar o caminho da imagem ou null se não houver
-          statusConta,
-          reputacao,
+          statusConta: statusContaBoolean,
+          reputacao: reputacaoNumber,
           emailContato,
           senha: senhaCriptografada,
           numeroSubConta,
@@ -667,7 +678,7 @@ accountRouter.post(
           telefone,
           celular,
           logradouro,
-          numero,
+          numero: numeroNumber,
           cep,
           complemento,
           bairro,
