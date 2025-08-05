@@ -4,12 +4,13 @@
   "description": "",
   "main": "index.js",
   "prisma": {
-    "seed": "ts-node --transpile-only prisma/seed/index.ts"
+    "seed": "tsx seeds/index.ts"
   },
   "scripts": {
     "seed": "tsx seeds/index.ts",
     "seed:clear": "tsx seeds/index.ts --clear",
     "seed:dev": "tsx watch seeds/index.ts",
+    "db:reset": "npx prisma migrate reset --force --schema=./prisma/schema.prisma",
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "start": "ts-node src/index.ts",
