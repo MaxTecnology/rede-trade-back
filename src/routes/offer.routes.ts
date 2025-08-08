@@ -8,13 +8,15 @@ import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 const offerRouter = Router();
 
 // Rota para upload de imagem separada
-offerRouter.post('/upload-imagem', upload.single('image'), async (req: Request, res: Response) => {
+offerRouter.post('/upload-imagem', upload.any(), async (req: Request, res: Response) => {
   try {
-    if (!req.file) {
+    const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'image') : null;
+    
+    if (!imagemFile) {
       return res.status(400).json({ error: 'Nenhum arquivo enviado' });
     }
 
-    const imagePath = `/uploads/images/${req.file.filename}`;
+    const imagePath = `/uploads/images/${imagemFile.filename}`;
     
     res.status(200).json({
       message: 'Upload realizado com sucesso',
@@ -29,7 +31,7 @@ offerRouter.post('/upload-imagem', upload.single('image'), async (req: Request, 
 offerRouter.post(
   "/criar-oferta",
   strictRateLimit, // Rate limiting para criação de ofertas
-  upload.single('imagem'), // Middleware de upload adicionado
+  upload.any(), // Middleware de upload flexível
   verifyToken,
   checkBlocked,
   async (req: Request, res: Response) => {
@@ -76,8 +78,9 @@ offerRouter.post(
       }
 
       // Se uma nova imagem foi enviada, usar seu caminho
-      if (req.file) {
-        const imagePath = `/uploads/images/${req.file.filename}`;
+      const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
+      if (imagemFile) {
+        const imagePath = `/uploads/images/${imagemFile.filename}`;
         imagens = [imagePath]; // Array com a nova imagem
       }
 
@@ -400,7 +403,7 @@ offerRouter.get('/debug-hierarquia', verifyToken, async (req: Request, res: Resp
 // Rota para atualizar uma oferta - ATUALIZADA COM UPLOAD
 offerRouter.put(
   "/atualizar-oferta/:ofertaId",
-  upload.single('imagem'), // Middleware de upload adicionado
+  upload.any(), // Middleware de upload flexível
   verifyToken,
   checkBlocked,
   async (req: Request, res: Response) => {
@@ -445,8 +448,9 @@ offerRouter.put(
       }
 
       // Se uma nova imagem foi enviada, atualizar o array de imagens
-      if (req.file) {
-        const imagePath = `/uploads/images/${req.file.filename}`;
+      const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
+      if (imagemFile) {
+        const imagePath = `/uploads/images/${imagemFile.filename}`;
         updateData.imagens = [imagePath]; // Array com a nova imagem
       }
 

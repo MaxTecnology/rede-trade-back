@@ -20,7 +20,7 @@ import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 const userRouter = Router();
 
 // Rota para upload de imagem separada
-userRouter.post('/upload-imagem', upload.single('image'), uploadImagem);
+userRouter.post('/upload-imagem', upload.any(), uploadImagem);
 
 // Rota para criar um usuário com upload de imagem
 userRouter.post("/criar-usuario", 
@@ -335,7 +335,7 @@ userRouter.get('/buscar-usuario/:id', async (req: Request, res: Response) => {
 // Rota para atualizar usuário completo - VERSÃO LIMPA
 
 userRouter.put("/atualizar-usuario-completo/:id", 
-  upload.single('imagem'), 
+  upload.any(), 
   verifyToken, 
   async (req: Request, res: Response) => {
     try {
@@ -343,18 +343,15 @@ userRouter.put("/atualizar-usuario-completo/:id",
       
       console.log('🚀 === INÍCIO ATUALIZAÇÃO USUÁRIO ===');
       console.log('🆔 ID do usuário:', id);
-      console.log('📁 Arquivo enviado:', req.file ? {
-        filename: req.file.filename,
-        mimetype: req.file.mimetype,
-        size: req.file.size
-      } : 'Nenhum arquivo');
+      console.log('📁 Arquivos enviados:', req.files ? req.files.length : 0);
 
       // Extrair todos os dados do body
       const dadosRecebidos = { ...req.body };
       
-      // Se tem arquivo, adicionar à estrutura
-      if (req.file) {
-        dadosRecebidos.imagem = `/uploads/images/${req.file.filename}`;
+      // Se tem arquivo de imagem, adicionar à estrutura
+      const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
+      if (imagemFile) {
+        dadosRecebidos.imagem = `/uploads/images/${imagemFile.filename}`;
         console.log('📸 Imagem processada:', dadosRecebidos.imagem);
       }
 
@@ -558,7 +555,7 @@ userRouter.put("/atualizar-usuario-completo/:id",
 
 // Nova rota para atualizar usuário e conta de forma transacional - ATUALIZADA COM UPLOAD
 userRouter.put("/atualizar-usuario-completo/:id", 
-  upload.single('imagem'), // Middleware de upload adicionado
+  upload.any(), // Middleware de upload flexível
   verifyToken, 
   async (req: Request, res: Response) => {
     try {
@@ -566,10 +563,11 @@ userRouter.put("/atualizar-usuario-completo/:id",
       let { dadosUsuario, dadosConta } = req.body;
 
       // Se uma nova imagem foi enviada, adicionar aos dados do usuário
-      if (req.file) {
+      const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
+      if (imagemFile) {
         if (!dadosUsuario) dadosUsuario = {};
-        dadosUsuario.imagem = `/uploads/images/${req.file.filename}`;
-        console.log("📸 Nova imagem do usuário completo enviada:", req.file.filename);
+        dadosUsuario.imagem = `/uploads/images/${imagemFile.filename}`;
+        console.log("📸 Nova imagem do usuário completo enviada:", imagemFile.filename);
       }
 
       console.log("Atualizando usuário completo ID:", id);

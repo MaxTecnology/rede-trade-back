@@ -47,11 +47,13 @@ export const getTipoDeContaUsuario = async (req: Request, res: Response) => {
 // Função para upload de imagem separada
 export const uploadImagem = async (req: Request, res: Response) => {
   try {
-    if (!req.file) {
+    const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'image') : null;
+    
+    if (!imagemFile) {
       return res.status(400).json({ error: 'Nenhuma imagem foi enviada' });
     }
 
-    const imagePath = `/uploads/images/${req.file.filename}`;
+    const imagePath = `/uploads/images/${imagemFile.filename}`;
     
     res.json({
       message: 'Upload realizado com sucesso',
@@ -116,9 +118,10 @@ export const criarUsuario = [
 
       // Verificar se tem imagem enviada e definir o caminho
       let imagemPath: string | null = null;
-      if (req.file) {
-        imagemPath = `/uploads/images/${req.file.filename}`;
-        console.log("📸 Imagem enviada:", req.file.filename);
+      const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
+      if (imagemFile) {
+        imagemPath = `/uploads/images/${imagemFile.filename}`;
+        console.log("📸 Imagem enviada:", imagemFile.filename);
       }
 
       if (typeof senha !== "string") {

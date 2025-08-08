@@ -550,7 +550,7 @@ accountRouter.get(
 // Rota para criar uma subconta para a conta pai - ATUALIZADA COM UPLOAD
 accountRouter.post(
   "/criar-subconta/:idContaPai",
-  upload.single('imagem'), // Middleware de upload adicionado
+  upload.any(), // Middleware de upload flexível
   verifyToken,
   checkBlocked,
   async (req: Request, res: Response) => {
@@ -588,9 +588,10 @@ accountRouter.post(
 
       // Verificar se tem imagem enviada e definir o caminho
       let imagemPath = null;
-      if (req.file) {
-        imagemPath = `/uploads/images/${req.file.filename}`;
-        console.log("📸 Imagem da subconta enviada:", req.file.filename);
+      const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
+      if (imagemFile) {
+        imagemPath = `/uploads/images/${imagemFile.filename}`;
+        console.log("📸 Imagem da subconta enviada:", imagemFile.filename);
       }
 
       // Verificar se o email já existe em usuários ou subcontas
@@ -880,7 +881,7 @@ accountRouter.get(
 // Rota para atualizar os dados de uma subconta - ATUALIZADA COM UPLOAD
 accountRouter.patch(
   "/atualizar-subconta/:idSubConta",
-  upload.single('imagem'), // Middleware de upload adicionado
+  upload.any(), // Middleware de upload flexível
   verifyToken,
   checkBlocked,
   async (req: Request, res: Response) => {
@@ -920,9 +921,10 @@ accountRouter.patch(
       };
 
       // Se uma nova imagem foi enviada, adicionar ao objeto de atualização
-      if (req.file) {
-        dadosAtualizacao.imagem = `/uploads/images/${req.file.filename}`;
-        console.log("📸 Nova imagem da subconta enviada:", req.file.filename);
+      const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
+      if (imagemFile) {
+        dadosAtualizacao.imagem = `/uploads/images/${imagemFile.filename}`;
+        console.log("📸 Nova imagem da subconta enviada:", imagemFile.filename);
       }
 
       // Verificar se a subconta existe
