@@ -459,7 +459,9 @@ creditRouter.get("/matriz/analisar", async (req: Request, res: Response) => {
     // Consulta todas as solicitações de crédito com status "Encaminhado para a matriz"
     const solicitacoesEmAnalise = await prisma.solicitacaoCredito.findMany({
       where: {
-        status: "Encaminhado para a matriz" || "Pendente",
+        status: {
+          in: ["Encaminhado para a matriz", "Pendente"]
+        }
       },
       include: {
         usuarioCriador: {
