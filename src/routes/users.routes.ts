@@ -12,7 +12,7 @@ import {
   listarUsuariosAssociados,
   uploadImagem 
 } from "../controllers/users.controller";
-import { checkBlocked } from "../middlewares/checkBlocked.middleware";
+import { checkBlocked, invalidateUserBlockCache } from "../middlewares/checkBlocked.middleware";
 import { upload } from "../middlewares/upload"; // Importar o middleware de upload
 import { authRateLimit, apiRateLimit } from "../middlewares/rateLimit.middleware"; // Rate limiting
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
@@ -385,8 +385,8 @@ userRouter.put("/atualizar-usuario-completo/:id",
         'dataVencimentoFatura'
       ];
       
-      const dadosUsuario = {};
-      const dadosConta = {};
+      const dadosUsuario: any = {};
+      const dadosConta: any = {};
       
       // Separar campos
       Object.keys(dadosRecebidos).forEach(key => {
@@ -435,7 +435,7 @@ userRouter.put("/atualizar-usuario-completo/:id",
         // Atualizar usuário se há dados
         let usuarioAtualizado = usuarioExiste;
         if (Object.keys(dadosUsuario).length > 0) {
-          const dadosProcessados = { ...dadosUsuario };
+          const dadosProcessados: any = { ...dadosUsuario };
           
           // Converter tipos conforme schema
           if (dadosProcessados.numero && dadosProcessados.numero !== '') {
@@ -480,7 +480,7 @@ userRouter.put("/atualizar-usuario-completo/:id",
           usuarioAtualizado = await prisma.usuarios.update({
             where: { idUsuario: parseInt(id, 10) },
             data: dadosProcessados,
-          });
+          }) as any;
           
           console.log('✅ Usuário atualizado no banco');
         }
@@ -488,7 +488,7 @@ userRouter.put("/atualizar-usuario-completo/:id",
         // Atualizar conta se há dados e conta existe
         let contaAtualizada = usuarioExiste.conta;
         if (Object.keys(dadosConta).length > 0 && usuarioExiste.conta) {
-          const dadosContaProcessados = { ...dadosConta };
+          const dadosContaProcessados: any = { ...dadosConta };
           
           // Converter tipos conforme schema da tabela Conta
           // Float fields
@@ -542,7 +542,7 @@ userRouter.put("/atualizar-usuario-completo/:id",
       console.log('🚀 === FIM ATUALIZAÇÃO USUÁRIO ===');
       
       return res.status(200).json(resposta);
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ === ERRO NA ATUALIZAÇÃO ===');
       console.error('❌ Erro:', error.message);
       console.error('❌ Stack:', error.stack);
@@ -594,7 +594,7 @@ userRouter.put("/atualizar-usuario-completo/:id",
           usuarioAtualizado = await prisma.usuarios.update({
             where: { idUsuario: parseInt(id, 10) },
             data: dadosUsuario,
-          });
+          }) as any;
         }
 
         // Atualizar dados da conta se fornecidos e conta existir
@@ -1105,5 +1105,113 @@ userRouter.get('/buscar-franquias/:matrizId', buscarFranquiasPorMatriz);
 userRouter.get('/usuarios-criados/:usuarioCriadorId', listarUsuariosAssociados);
 
 userRouter.get('/buscar-usuario-params', BuscarUsuariosParams);
+
+// Rota para bloquear usuário
+userRouter.post('/bloquear-usuario/:id', 
+  authRateLimit,
+  verifyToken, 
+  checkBlocked, 
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const userId = parseInt(id, 10);
+
+      if (!userId || isNaN(userId)) {
+        return res.status(400).json({ error: "ID do usuário inválido." });
+      }
+
+      // Verificar se o usuário existe
+      const usuarioExistente = await prisma.usuarios.findUnique({
+        where: { idUsuario: userId },
+        select: { idUsuario: true, nome: true, bloqueado: true }
+      });
+
+      if (!usuarioExistente) {
+        return res.status(404).json({ error: 'Usuário não encontrado.' });
+      }
+
+      if (usuarioExistente.bloqueado) {
+        return res.status(400).json({ error: 'Usuário já está bloqueado.' });
+      }
+
+      // Bloquear o usuário
+      const usuarioAtualizado = await prisma.usuarios.update({
+        where: { idUsuario: userId },
+        data: { bloqueado: true },
+        select: { idUsuario: true, nome: true, bloqueado: true }
+      });
+
+      // Invalidar cache do middleware de bloqueio
+      invalidateUserBlockCache(userId);
+
+      console.log(`✅ Usuário ${usuarioAtualizado.nome} (ID: ${userId}) foi bloqueado`);
+      
+      return res.status(200).json({
+        message: 'Usuário bloqueado com sucesso.',
+        usuario: usuarioAtualizado
+      });
+
+    } catch (error) {
+      console.error('❌ Erro ao bloquear usuário:', error);
+      return res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Erro interno do servidor.' 
+      });
+    }
+  }
+);
+
+// Rota para desbloquear usuário
+userRouter.post('/desbloquear-usuario/:id', 
+  authRateLimit,
+  verifyToken, 
+  checkBlocked, 
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const userId = parseInt(id, 10);
+
+      if (!userId || isNaN(userId)) {
+        return res.status(400).json({ error: "ID do usuário inválido." });
+      }
+
+      // Verificar se o usuário existe
+      const usuarioExistente = await prisma.usuarios.findUnique({
+        where: { idUsuario: userId },
+        select: { idUsuario: true, nome: true, bloqueado: true }
+      });
+
+      if (!usuarioExistente) {
+        return res.status(404).json({ error: 'Usuário não encontrado.' });
+      }
+
+      if (!usuarioExistente.bloqueado) {
+        return res.status(400).json({ error: 'Usuário não está bloqueado.' });
+      }
+
+      // Desbloquear o usuário
+      const usuarioAtualizado = await prisma.usuarios.update({
+        where: { idUsuario: userId },
+        data: { bloqueado: false },
+        select: { idUsuario: true, nome: true, bloqueado: true }
+      });
+
+      // Invalidar cache do middleware de bloqueio
+      invalidateUserBlockCache(userId);
+
+      console.log(`✅ Usuário ${usuarioAtualizado.nome} (ID: ${userId}) foi desbloqueado`);
+      
+      return res.status(200).json({
+        message: 'Usuário desbloqueado com sucesso.',
+        usuario: usuarioAtualizado
+      });
+
+    } catch (error) {
+      console.error('❌ Erro ao desbloquear usuário:', error);
+      return res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Erro interno do servidor.' 
+      });
+    }
+  }
+);
 
 export default userRouter;

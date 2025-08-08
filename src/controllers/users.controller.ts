@@ -115,7 +115,7 @@ export const criarUsuario = [
       } = req.body;
 
       // Verificar se tem imagem enviada e definir o caminho
-      let imagemPath = null;
+      let imagemPath: string | null = null;
       if (req.file) {
         imagemPath = `/uploads/images/${req.file.filename}`;
         console.log("📸 Imagem enviada:", req.file.filename);
@@ -138,7 +138,7 @@ export const criarUsuario = [
           .json({ error: "Usuário com o mesmo e-mail ou CPF já existe." });
       }
 
-      let matrizId = null;
+      let matrizId: number | null = null;
 
       // Lógica para determinar matriz
       if (usuarioCriadorId) {
@@ -188,7 +188,7 @@ export const criarUsuario = [
                   },
                 },
               },
-            });
+            }) as any;
 
             if (!usuarioAtual) break;
           }
@@ -205,7 +205,7 @@ export const criarUsuario = [
 
       // FUNÇÃO PARA BUSCAR TIPO DE CONTA DINAMICAMENTE
       const buscarTipoConta = async (tipoUsuario: string): Promise<number> => {
-        const mapeamentoTipos = {
+        const mapeamentoTipos: { [key: string]: string } = {
           'Gerente': 'Premium',
           'Associado': 'Associado',
           'Matriz': 'Matriz',
@@ -303,15 +303,15 @@ export const criarUsuario = [
           regiao,
           aceitaOrcamento: aceitaOrcamento === 'true' || aceitaOrcamento === true,
           aceitaVoucher: aceitaVoucher === 'true' || aceitaVoucher === true,
-          tipoOperacao: tipoOperacao ? parseInt(tipoOperacao, 10) : null,
+          tipoOperacao: tipoOperacao ? parseInt(tipoOperacao, 10) : 1,
           categoriaId: categoriaId ? parseInt(categoriaId, 10) : null,
           subcategoriaId: subcategoriaId ? parseInt(subcategoriaId, 10) : null,
         };
 
         // Adicionar campos específicos se usuarioCriadorId existir
         if (usuarioCriadorId) {
-          dadosUsuario.usuarioCriadorId = parseInt(usuarioCriadorId, 10);
-          dadosUsuario.matrizId = matrizId;
+          (dadosUsuario as any).usuarioCriadorId = parseInt(usuarioCriadorId, 10);
+          (dadosUsuario as any).matrizId = matrizId;
         }
 
         console.log("💾 Criando usuário...");
@@ -481,7 +481,7 @@ Equipe RedeTrade`;
         ...usuarioCompleto,
         senha: undefined, // Não retornar a senha na resposta
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Erro ao criar usuário:", error);
       console.error("❌ Stack trace:", error.stack);
       return res.status(500).json({ 

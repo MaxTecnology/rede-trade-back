@@ -18,8 +18,21 @@ dotenv.config();
 
 const app = express();
 
-// Configuração do CORS
-app.use(cors());
+// Configuração do CORS - Restringir origens permitidas
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:5173', // Vite dev server
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173'
+    // Adicionar domínios de produção quando necessário
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json());
 

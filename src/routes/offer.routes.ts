@@ -232,7 +232,7 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
     }
 
     // Adicionar filtros de busca específicos das ofertas
-    let filtrosOferta = {};
+    let filtrosOferta: any = {};
 
     // Filtro por título
     if (titulo) {
@@ -530,7 +530,7 @@ offerRouter.get('/buscar-oferta/:ofertaId', async (req: Request, res: Response) 
         transacoes: {
           select: {
             idTransacao: true,
-            codigoTransacao: true,
+            codigo: true,
             valorRt: true,
             status: true,
             createdAt: true,
