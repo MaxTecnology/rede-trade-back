@@ -29,6 +29,8 @@ transactionRouter.post("/estornar-transacao/:idTransacao",  verifyToken,
 // Rota para listar todas as transações com suporte à paginação
 transactionRouter.get(
   "/listar-transacoes",
+  verifyToken,
+  checkBlocked,
   async (req: Request, res: Response) => {
     try {
       const { page = 1, pageSize = 10 } = req.query;
@@ -89,6 +91,8 @@ transactionRouter.get(
 // Rota para obter uma transação pelo ID
 transactionRouter.get(
   "/buscar-transacao/:id",
+  verifyToken,
+  checkBlocked,
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;

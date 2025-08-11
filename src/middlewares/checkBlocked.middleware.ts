@@ -67,7 +67,6 @@ export const checkBlocked = async (
         .status(403)
         .json({ error: "Usuário bloqueado, acesso negado." });
     }
-
     return next();
   } catch (error) {
     console.error(error);

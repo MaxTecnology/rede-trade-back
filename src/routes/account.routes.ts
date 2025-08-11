@@ -580,18 +580,12 @@ accountRouter.post(
       const reputacaoNumber = parseFloat(reputacao) || 0;
       const numeroNumber = numero ? parseInt(numero, 10) : null;
 
-      console.log("🔧 Conversão de tipos:", {
-        statusConta: `"${statusConta}" -> ${statusContaBoolean}`,
-        reputacao: `"${reputacao}" -> ${reputacaoNumber}`,
-        numero: `"${numero}" -> ${numeroNumber}`
-      });
 
       // Verificar se tem imagem enviada e definir o caminho
       let imagemPath = null;
       const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
       if (imagemFile) {
         imagemPath = `/uploads/images/${imagemFile.filename}`;
-        console.log("📸 Imagem da subconta enviada:", imagemFile.filename);
       }
 
       // Verificar se o email já existe em usuários ou subcontas
@@ -711,7 +705,6 @@ accountRouter.post(
       // Desestruture a subconta, omitindo a senha
       const { senha: senhaSubConta, ...subContaSemSenha } = novaSubConta;
 
-      console.log("✅ Subconta criada com sucesso:", novaSubConta.nome);
 
       // Retorne a subconta sem a senha
       return res.status(201).json(subContaSemSenha);
@@ -800,6 +793,75 @@ accountRouter.get(
         prisma.subContas.count({
           where: { contaPaiId: parseInt(idContaPai, 10) },
         }),
+      ]);
+
+      // Calcular o número total de páginas
+      const totalPages = Math.ceil(totalSubcontas / itensPorPagina);
+
+      // Omitir senha da lista de subcontas
+      const subcontasSemSenha = subcontas.map(
+        ({ senha, ...subcontaSemSenha }) => subcontaSemSenha
+      );
+
+      // Metadados de paginação
+      const paginationMeta = {
+        currentPage: paginaAtual,
+        pageSize: itensPorPagina,
+        totalItems: totalSubcontas,
+        totalPages: totalPages,
+      };
+
+      // Retornar a lista de subcontas com metadados de paginação e sem senha
+      return res
+        .status(200)
+        .json({ subcontas: subcontasSemSenha, meta: paginationMeta });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: "Erro interno do servidor." });
+    }
+  }
+);
+
+// Rota para listar todas as subcontas do sistema (para usuários Matriz)
+accountRouter.get(
+  "/listar-todas-subcontas",
+  async (req: Request, res: Response) => {
+    try {
+      const { page, pageSize } = req.query;
+
+      // Configurações padrão de paginação
+      const paginaAtual = parseInt(page as string, 10) || 1;
+      const itensPorPagina = parseInt(pageSize as string, 10) || 100; // Mais itens para Matriz
+
+      // Calcular o índice de início com base na página atual
+      const indiceInicio = (paginaAtual - 1) * itensPorPagina;
+
+      // Buscar todas as subcontas do sistema
+      const [subcontas, totalSubcontas] = await Promise.all([
+        prisma.subContas.findMany({
+          include: {
+            contaPai: {
+              select: {
+                idConta: true,
+                numeroConta: true,
+                nomeFranquia: true,
+                usuario: {
+                  select: {
+                    nome: true,
+                    email: true,
+                    tipo: true,
+                  }
+                }
+              },
+            },
+          },
+          skip: indiceInicio,
+          take: itensPorPagina,
+          orderBy: {
+            numeroSubConta: 'asc'
+          }
+        }),
+        prisma.subContas.count(),
       ]);
 
       // Calcular o número total de páginas
@@ -924,7 +986,6 @@ accountRouter.patch(
       const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
       if (imagemFile) {
         dadosAtualizacao.imagem = `/uploads/images/${imagemFile.filename}`;
-        console.log("📸 Nova imagem da subconta enviada:", imagemFile.filename);
       }
 
       // Verificar se a subconta existe
@@ -945,7 +1006,6 @@ accountRouter.patch(
       // Omitir a senha da subconta atualizada
       const { senha, ...subContaSemSenha } = subContaAtualizada;
 
-      console.log("✅ Subconta atualizada com sucesso:", subContaAtualizada.nome);
 
       // Retornar a subconta atualizada
       return res.status(200).json(subContaSemSenha);

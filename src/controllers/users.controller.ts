@@ -121,7 +121,6 @@ export const criarUsuario = [
       const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
       if (imagemFile) {
         imagemPath = `/uploads/images/${imagemFile.filename}`;
-        console.log("📸 Imagem enviada:", imagemFile.filename);
       }
 
       if (typeof senha !== "string") {
@@ -145,7 +144,6 @@ export const criarUsuario = [
 
       // Lógica para determinar matriz
       if (usuarioCriadorId) {
-        console.log("🔍 Buscando usuário criador:", usuarioCriadorId);
         
         const usuarioCriador = await prisma.usuarios.findUnique({
           where: { idUsuario: parseInt(usuarioCriadorId, 10) },
@@ -229,7 +227,6 @@ export const criarUsuario = [
           throw new Error(`Tipo de conta '${tipoDaConta}' não encontrado no banco de dados`);
         }
 
-        console.log(`🔍 Tipo de conta para ${tipoUsuario}:`, tipoConta.tipoDaConta, "ID:", tipoConta.idTipoConta);
         return tipoConta.idTipoConta;
       };
 
@@ -317,27 +314,23 @@ export const criarUsuario = [
           (dadosUsuario as any).matrizId = matrizId;
         }
 
-        console.log("💾 Criando usuário...");
 
         // Criar usuário
         const novoUsuario = await prisma.usuarios.create({
           data: dadosUsuario,
         });
 
-        console.log("✅ Usuário criado:", novoUsuario.idUsuario, novoUsuario.nome);
 
         // CRIAR CONTA AUTOMATICAMENTE BASEADO NO TIPO
         let novaConta = null;
         
         if (tipo === 'Gerente') {
-          console.log("🏦 Criando conta para gerente...");
 
           // Buscar tipo de conta dinamicamente
           const tipoContaId = await buscarTipoConta('Gerente');
 
           // Gerar número único para a conta
           const numeroConta = await gerarNumeroConta('GER');
-          console.log("🔢 Número da conta gerado:", numeroConta);
 
           // Dados da conta
           const dadosConta = {
@@ -368,19 +361,16 @@ export const criarUsuario = [
             data: dadosConta,
           });
 
-          console.log("✅ Conta criada:", novaConta.idConta, novaConta.numeroConta);
         }
         
         // CRIAR CONTA PARA ASSOCIADOS
         else if (tipo === 'Associado') {
-          console.log("🏦 Criando conta para associado...");
 
           // Buscar tipo de conta dinamicamente
           const tipoContaId = await buscarTipoConta('Associado');
 
           // Gerar número único para a conta com prefixo ASS
           const numeroConta = await gerarNumeroConta('ASS');
-          console.log("🔢 Número da conta associado gerado:", numeroConta);
 
           // Dados da conta para associado
           const dadosConta = {
@@ -411,7 +401,6 @@ export const criarUsuario = [
             data: dadosConta,
           });
 
-          console.log("✅ Conta de associado criada:", novaConta.idConta, novaConta.numeroConta);
         }
 
         return { usuario: novoUsuario, conta: novaConta };
@@ -472,13 +461,10 @@ Atenciosamente,
 Equipe RedeTrade`;
 
         await enviarEmail(destinatario, assunto, corpo);
-        console.log("📧 Email de boas-vindas enviado para:", destinatario);
         
       } catch (emailError) {
-        console.error("⚠️ Erro ao enviar email de boas-vindas:", emailError);
       }
       
-      console.log("🎉 Criação concluída com sucesso!");
       
       return res.status(201).json({
         ...usuarioCompleto,
@@ -486,7 +472,6 @@ Equipe RedeTrade`;
       });
     } catch (error: any) {
       console.error("❌ Erro ao criar usuário:", error);
-      console.error("❌ Stack trace:", error.stack);
       return res.status(500).json({ 
         error: "Erro interno do servidor.",
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -573,18 +558,25 @@ export const listarUsuariosAssociados = async (req: Request, res: Response) => {
           },
         },
       },
+      include: {
+        conta: {
+          include: {
+            tipoDaConta: true,
+            plano: true,
+          }
+        },
+        categoria: true,
+        subcategoria: true,
+      }
     });
-
-    if (usuariosAssociados.length < 1) {
-      return res.status(404).json({ error: "Não foi possível encontrar os associados." });
-    }
     
-    // Mapeia os resultados e remove a senha
+    // Mapeia os resultados e remove a senha (mesmo se lista vazia)
     const usuariosAssociadosSemSenha = usuariosAssociados.map((usuario) => {
       const { senha, tokenResetSenha, ...usuarioSemSenha } = usuario;
       return usuarioSemSenha;
     });
 
+    // Retorna lista vazia se não houver associados ao invés de erro 404
     return res.status(200).json(usuariosAssociadosSemSenha);
   } catch (error) {
     console.error(error);

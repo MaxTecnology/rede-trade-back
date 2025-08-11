@@ -36,6 +36,9 @@ offerRouter.post(
   checkBlocked,
   async (req: Request, res: Response) => {
     try {
+      console.log('➕ DEBUG TEMPORÁRIO: Recebendo cadastro de oferta, userId:', res.locals.userId);
+      console.log('📋 DEBUG TEMPORÁRIO: Dados recebidos no body:', req.body);
+      console.log('📎 DEBUG TEMPORÁRIO: Arquivos recebidos:', req.files);
       const userId = res.locals.userId; // Obter userId do token
 
       // Obter dados da oferta do corpo da requisição
@@ -87,16 +90,20 @@ offerRouter.post(
       // Definir status como true por padrão, a menos que seja explicitamente false
       const finalStatus = (status === 'false' || status === false) ? false : true;
 
+      console.log('🔍 DEBUG TEMPORÁRIO: Verificando duplicatas...');
       // Verificar se já existe uma oferta com o mesmo nome e mesmo valor
       const ofertaExistente = await prisma.oferta.findFirst({
         where: { titulo, valor: parseFloat(valor) },
       });
 
       if (ofertaExistente) {
+        console.log('❌ DEBUG TEMPORÁRIO: Oferta duplicada encontrada');
         return res.status(400).json({
           error: "Já existe uma oferta com o mesmo nome e valor.",
         });
       }
+      console.log('✅ DEBUG TEMPORÁRIO: Nenhuma duplicata encontrada');
+      console.log('🗄️ DEBUG TEMPORÁRIO: Criando oferta no banco...');
 
       const novaOferta = await prisma.oferta.create({
         data: {
@@ -122,9 +129,20 @@ offerRouter.post(
         },
       });
 
+      console.log('✅ DEBUG TEMPORÁRIO: Oferta criada com sucesso:', novaOferta.titulo, 'ID:', novaOferta.idOferta);
       res.status(201).json(novaOferta);
-    } catch (error) {
-      res.status(500).json({ error: "Erro ao cadastrar oferta." });
+    } catch (error: any) {
+      console.error('❌ DEBUG TEMPORÁRIO: Erro ao cadastrar oferta:', error);
+      console.error('❌ DEBUG TEMPORÁRIO: Erro detalhado:', error.message);
+      console.error('❌ DEBUG TEMPORÁRIO: Stack:', error.stack);
+      
+      // Se for erro do Prisma, mostrar detalhes
+      if (error.code) {
+        console.error('❌ DEBUG TEMPORÁRIO: Código do erro:', error.code);
+        console.error('❌ DEBUG TEMPORÁRIO: Meta do erro:', error.meta);
+      }
+      
+      res.status(500).json({ error: "Erro ao cadastrar oferta: " + error.message });
     }
   }
 );
@@ -132,6 +150,7 @@ offerRouter.post(
 // Rota para listar ofertas com filtros hierárquicos
 offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Request, res: Response) => {
   try {
+    console.log('🔍 DEBUG TEMPORÁRIO: Requisição recebida para listar ofertas, userId:', res.locals.userId);
     const userId = res.locals.userId; // Do middleware verifyToken
     const { 
       page = 1, 
@@ -159,7 +178,6 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
-    // console.log('👤 DEBUG: Tipo de usuário logado:', usuarioLogado.tipo, '(ID:', userId, ')'); // Comentado para produção
 
     let whereClause: any = {};
 
@@ -167,14 +185,11 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
     // Usado para a página "Minhas Ofertas".
     if (filtroUsuarioId) {
       whereClause.usuarioId = parseInt(filtroUsuarioId.toString());
-      // console.log('🔍 DEBUG: Filtro por usuarioId aplicado:', whereClause.usuarioId); // Comentado para produção
     } else {
       // Lógica de hierarquia padrão para a página principal de ofertas
       if (usuarioLogado.tipo === 'Matriz') {
-        // console.log('👑 DEBUG: Usuário Matriz - buscando todas as ofertas visíveis.'); // Comentado para produção
         // Matriz vê tudo (nenhum filtro de usuarioId específico)
       } else if (usuarioLogado.tipo === 'Gerente') {
-        // console.log('🏢 DEBUG: Usuário Gerente - aplicando filtro hierárquico.'); // Comentado para produção
         const matrizId = usuarioLogado.matrizId;
         
         // Buscar todos os usuários que este gerente pode ver (seus subordinados diretos e indiretos)
@@ -198,10 +213,8 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
           ...usuariosVisiveis.map(u => u.idUsuario) // Gerente e todos os seus subordinados
         ].filter(id => id != null);
         whereClause.usuarioId = { in: idsPermitidos };
-//         console.log('🎯 DEBUG: IDs permitidos para gerente:', idsPermitidos);
 
       } else if (usuarioLogado.tipo === 'Franquia') {
-//         console.log('🏪 DEBUG: Usuário Franquia - aplicando filtro hierárquico.');
         const matrizId = usuarioLogado.matrizId;
         const gerenteId = usuarioLogado.usuarioCriadorId;
         
@@ -222,15 +235,12 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
           ...usuariosVisiveis.map(u => u.idUsuario)
         ].filter(id => id != null);
         whereClause.usuarioId = { in: idsPermitidos };
-//         console.log('🎯 DEBUG: IDs permitidos para franquia:', idsPermitidos);
 
       } else { // Associado
-//         console.log('👤 DEBUG: Usuário Associado - aplicando filtro hierárquico.');
         const matrizId = usuarioLogado.matrizId;
         const criadorId = usuarioLogado.usuarioCriadorId;
         const idsPermitidos = [matrizId, criadorId, userId].filter(id => id != null);
         whereClause.usuarioId = { in: idsPermitidos };
-//         console.log('🎯 DEBUG: IDs permitidos para associado:', idsPermitidos);
       }
     }
 
@@ -291,8 +301,9 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
       }
     };
 
-//     console.log('🔍 DEBUG: Where clause final para Prisma:', JSON.stringify(whereClauseComStatus, null, 2));
 
+    console.log('🔍 DEBUG TEMPORÁRIO: Where clause final:', JSON.stringify(whereClauseComStatus, null, 2));
+    
     const ofertas = await prisma.oferta.findMany({
       where: whereClauseComStatus,
       take: Number(limit),
@@ -301,6 +312,7 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
         idOferta: true,
         titulo: true,
         tipo: true,
+        status: true,
         descricao: true,
         quantidade: true,
         valor: true,
@@ -336,6 +348,9 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
     });
 
     const totalOfertas = await prisma.oferta.count({ where: whereClauseComStatus });
+    
+    console.log('📊 DEBUG TEMPORÁRIO: Ofertas encontradas:', ofertas.length, 'de', totalOfertas, 'total');
+    console.log('📋 DEBUG TEMPORÁRIO: Títulos das ofertas:', ofertas.map(o => o.titulo));
 
     // Criar objeto meta com informações de paginação
     const meta = {
@@ -347,9 +362,6 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
       hasPrev: Number(page) > 1
     };
 
-//     console.log(`✅ DEBUG: Retornando ${ofertas.length} ofertas (Total: ${totalOfertas}) para usuário ${usuarioLogado.tipo} (ID: ${userId})`);
-
-//     console.log('📋 DEBUG: Estrutura das ofertas antes de enviar:', JSON.stringify(ofertas, null, 2));
     res.status(200).json({ ofertas, meta });
   } catch (error: any) { // Adicionado : any para tipagem do erro
     console.error('❌ Erro ao listar ofertas (catch final):', error.message || error);

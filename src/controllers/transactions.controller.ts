@@ -1,36 +1,74 @@
 import { Request, Response } from "express";
 import { ContaInfo, obterContaInfo } from "../utils/transactions.utils";
 import { enviarEmailTransacao } from "../utils/utils";
+import { validarTransacao, validarEstorno, ErroFinanceiro, TipoErroFinanceiro, formatarValorRT, criarSaldoUtilizado, converterParaStringLegacy, parserarSaldoUtilizadoLegacy } from "../utils/financial-validations";
+import { executarTransacaoFinanceira, calcularOperacoesTransacao, DadosNovaTransacao } from "../utils/transaction-manager";
+import { executarComLockTransacao, executarComLockEstorno } from "../utils/transaction-locks";
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 
 export const insertTransaction = async (req: Request, res: Response) => {
-  try {
-    let contaComprador: ContaInfo | null;
-    let contaVendedor: ContaInfo | null;
-    const {
-      compradorId,
-      vendedorId,
-      subContaCompradorId,
-      subContaVendedorId,
-      valorRt,
-      numeroParcelas,
-      descricao,
-      nomeComprador,
-      nomeVendedor,
-      notaAtendimento,
-      valorAdicional,
-      observacaoNota,
-      ofertaId,
-    } = req.body;
+  const {
+    compradorId,
+    vendedorId,
+    subContaCompradorId,
+    subContaVendedorId,
+    valorRt,
+    numeroParcelas,
+    descricao,
+    nomeComprador,
+    nomeVendedor,
+    notaAtendimento,
+    valorAdicional,
+    observacaoNota,
+    ofertaId,
+  } = req.body;
+
+  // 🔒 FASE 1.4 - Sistema de Locks: Executar toda operação protegida por lock
+  console.log(`🔒 Iniciando transação com sistema de locks: Comprador ${compradorId} → Vendedor ${vendedorId}`);
+  
+  const resultado = await executarComLockTransacao(
+    compradorId,
+    vendedorId,
+    async (): Promise<{ novaTransacao: any, comprador: any, vendedor: any }> => {
+      // Toda lógica da transação fica dentro desta função protegida
+      let contaComprador: ContaInfo | null;
+      let contaVendedor: ContaInfo | null;
 
     // Obtenha as informações da conta do comprador e vendedor usando a função
     contaComprador = await obterContaInfo(subContaCompradorId, compradorId);
     contaVendedor = await obterContaInfo(subContaVendedorId, vendedorId);
 
     if (!contaComprador || !contaVendedor) {
-      return res
-        .status(400)
-        .json({ error: "Comprador ou vendedor não encontrado" });
+      throw new Error("Comprador ou vendedor não encontrado");
+    }
+
+    // 🔐 VALIDAÇÕES FINANCEIRAS CRÍTICAS - Fase 1
+    console.log(`🔍 Validando transação: ${formatarValorRT(valorRt)} de ${contaComprador.numeroConta} para ${contaVendedor.numeroConta}`);
+    
+    const resultadoValidacao = validarTransacao(contaComprador, contaVendedor, valorRt);
+    
+    if (!resultadoValidacao.valido) {
+      const erro = resultadoValidacao.erro!;
+      
+      // Log do erro para auditoria
+      console.error(`❌ Transação rejeitada: ${erro.tipo} - ${erro.message}`, {
+        compradorId,
+        vendedorId,
+        valor: valorRt,
+        detalhes: erro.detalhes
+      });
+      
+      throw new Error(`${erro.tipo}: ${erro.message}`);
+    }
+    
+    // Log de alertas se existirem
+    if (resultadoValidacao.alertas && resultadoValidacao.alertas.length > 0) {
+      console.warn(`⚠️ Alertas na transação:`, {
+        alertas: resultadoValidacao.alertas,
+        compradorId,
+        vendedorId,
+        valor: valorRt
+      });
     }
 
     // Otimização: usar aggregate em vez de findMany + reduce
@@ -44,15 +82,11 @@ export const insertTransaction = async (req: Request, res: Response) => {
     const totalTransacoesVendedor = resultadoAggregate._sum.valorRt || 0;
 
     if (totalTransacoesVendedor + valorRt > contaVendedor.limiteVendaEmpresa) {
-      return res
-        .status(400)
-        .json({ error: "Vendedor atingiu o limite de venda da empresa." });
+      throw new Error("Vendedor atingiu o limite de venda da empresa.");
     }
 
     if (totalTransacoesVendedor + valorRt > contaVendedor.limiteVendaTotal) {
-      return res
-        .status(400)
-        .json({ error: "Vendedor atingiu o limite total de venda." });
+      throw new Error("Vendedor atingiu o limite total de venda.");
     }
     let saldoUtilizado: string | null = null;
     let limiteUtilizado: number | null = 0;
@@ -73,41 +107,42 @@ export const insertTransaction = async (req: Request, res: Response) => {
       saldoCreditoDisponivel + saldoAnteriorComprador;
 
     if (saldoTotalDisponivel < valorRt) {
-      return res.json({
-        message:
-          "O comprador não possuí limite de crédito disponível para esta transação.",
-      });
+      throw new Error("O comprador não possuí limite de crédito disponível para esta transação.");
     }
 
+    // 🔒 TRANSAÇÃO ATÔMICA - Fase 1: Preparar dados para operação atômica  
+    console.log(`🔒 Iniciando operação atômica para transação de ${formatarValorRT(valorRt)}`);
+    
+    let valorSaldoPermutaUtilizado = 0;
+    let valorLimiteCreditoUtilizado = 0;
+    
     if (valorRt <= saldoAnteriorComprador) {
       saldoAposComprador = saldoAnteriorComprador - valorRt;
-      saldoUtilizado = `saldoPermuta - ${valorRt}`;
-      limiteDisponivel =
-        contaComprador.limiteCredito - contaComprador.limiteUtilizado;
-      await prisma.conta.update({
-        where: { idConta: contaComprador.idConta },
-        data: {
-          saldoPermuta: saldoAposComprador,
-          limiteDisponivel,
-        },
-      });
+      valorSaldoPermutaUtilizado = valorRt;
+      limiteDisponivel = contaComprador.limiteCredito - contaComprador.limiteUtilizado;
+      limiteUtilizado = contaComprador.limiteUtilizado; // Não muda
     } else {
       const valorAbatidoSaldoPermuta = saldoAnteriorComprador;
       const valorRestante = valorRt - valorAbatidoSaldoPermuta;
 
-      limiteUtilizado = valorRestante;
-      saldoAposComprador = saldoAnteriorComprador - valorRt;
-      limiteDisponivel = contaComprador.limiteCredito - (limiteUtilizado ?? 0);
-      saldoUtilizado = `saldoPermuta - ${valorAbatidoSaldoPermuta} / limiteCredito - ${limiteUtilizado}`;
-      await prisma.conta.update({
-        where: { idConta: contaComprador.idConta },
-        data: {
-          saldoPermuta: saldoAposComprador,
-          limiteDisponivel,
-          limiteUtilizado,
-        },
-      });
+      valorSaldoPermutaUtilizado = valorAbatidoSaldoPermuta;
+      valorLimiteCreditoUtilizado = valorRestante;
+      
+      limiteUtilizado = contaComprador.limiteUtilizado + valorRestante;
+      saldoAposComprador = 0; // Zera o saldo permuta
+      limiteDisponivel = contaComprador.limiteCredito - limiteUtilizado;
     }
+
+    // 🔄 FASE 1.3 - Criar estrutura detalhada do saldoUtilizado
+    const saldoUtilizadoDetalhado = criarSaldoUtilizado(valorSaldoPermutaUtilizado, valorLimiteCreditoUtilizado);
+    saldoUtilizado = converterParaStringLegacy(saldoUtilizadoDetalhado);
+    
+    console.log(`💰 Composição do pagamento:`, {
+      saldoPermuta: valorSaldoPermutaUtilizado,
+      limiteCredito: valorLimiteCreditoUtilizado,
+      total: valorRt,
+      detalhado: saldoUtilizadoDetalhado
+    });
 
     let limiteCreditoDisponivelAposComprador = limiteDisponivel;
     saldoAposVendedor = saldoAnteriorVendedor + valorRt;
@@ -129,82 +164,134 @@ export const insertTransaction = async (req: Request, res: Response) => {
       }
     }
 
-    const comprador = await prisma.usuarios.findUnique({
-      where: { idUsuario: compradorId },
-    });
+    // 🔒 TRANSAÇÃO ATÔMICA - Executar todas as operações em uma única transação
+    console.log(`🔒 Executando transação atômica...`);
+    
+    const resultadoTransacao = await prisma.$transaction(async (tx) => {
+      // 1. Buscar dados dos usuários
+      const comprador = await tx.usuarios.findUnique({
+        where: { idUsuario: compradorId },
+      });
 
-    const vendedor = await prisma.usuarios.findUnique({
-      where: { idUsuario: vendedorId },
-    });
-    const compradorNome = comprador?.nome;
-    const vendedorNome = vendedor?.nome;
+      const vendedor = await tx.usuarios.findUnique({
+        where: { idUsuario: vendedorId },
+      });
+      
+      const compradorNome = comprador?.nome;
+      const vendedorNome = vendedor?.nome;
 
-    const novaTransacao = await prisma.transacao.create({
-      data: {
-        compradorId,
-        vendedorId,
-        valorRt,
-        numeroParcelas,
-        descricao,
-        saldoAnteriorComprador,
-        saldoAnteriorVendedor,
-        saldoAposComprador,
-        limiteCreditoAnteriorComprador: limiteCreditoDisponivelAnterior,
-        limiteCreditoAposComprador: limiteCreditoDisponivelAposComprador,
-        saldoAposVendedor,
-        comissao,
-        comissaoParcelada,
-        nomeComprador: compradorNome || nomeComprador,
-        nomeVendedor: vendedorNome || nomeVendedor,
-        notaAtendimento,
-        subContaCompradorId: subContaCompradorId || null,
-        subContaVendedorId: subContaVendedorId || null,
-        valorAdicional,
-        observacaoNota,
-        ofertaId,
-        saldoUtilizado: saldoUtilizado || "",
-        status: "Concluída",
-      },
-    });
-
-    await prisma.conta.update({
-      where: { idConta: contaVendedor.idConta },
-      data: {
-        saldoPermuta: saldoAposVendedor,
-      },
-    });
-
-    const dataAtual = new Date();
-    const diaFechamentoFatura = contaComprador.diaFechamentoFatura;
-
-    let dataVencimento = new Date(
-      dataAtual.getFullYear(),
-      dataAtual.getMonth(),
-      contaComprador.dataVencimentoFatura
-    );
-
-    if (dataAtual.getDate() >= diaFechamentoFatura) {
-      dataVencimento.setMonth(dataVencimento.getMonth() + 1);
-    }
-
-    const cobrancasParceladas = [];
-
-    for (let i = 1; i <= numeroParcelas; i++) {
-      const novaCobrancaParcelada = await prisma.cobranca.create({
+      // 2. Atualizar conta do comprador
+      await tx.conta.update({
+        where: { idConta: contaComprador!.idConta },
         data: {
-          valorFatura: comissaoParcelada,
-          referencia: `Transação #${novaTransacao.idTransacao} - Parcela ${i}`,
-          status: "Emitida",
-          transacaoId: novaTransacao.idTransacao,
-          usuarioId: novaTransacao.compradorId,
-          contaId: contaComprador.idConta,
-          vencimentoFatura: dataVencimento,
-          gerenteContaId: contaComprador.gerenteContaId,
+          saldoPermuta: saldoAposComprador,
+          limiteDisponivel: limiteDisponivel!,
+          limiteUtilizado: limiteUtilizado!,
         },
       });
 
-      cobrancasParceladas.push(novaCobrancaParcelada);
+      // 3. Atualizar conta do vendedor
+      await tx.conta.update({
+        where: { idConta: contaVendedor!.idConta },
+        data: {
+          saldoPermuta: saldoAposVendedor,
+        },
+      });
+
+      // 4. Criar a transação
+      const novaTransacao = await tx.transacao.create({
+        data: {
+          compradorId,
+          vendedorId,
+          valorRt,
+          numeroParcelas,
+          descricao,
+          saldoAnteriorComprador,
+          saldoAnteriorVendedor,
+          saldoAposComprador,
+          limiteCreditoAnteriorComprador: limiteCreditoDisponivelAnterior,
+          limiteCreditoAposComprador: limiteCreditoDisponivelAposComprador,
+          saldoAposVendedor,
+          comissao,
+          comissaoParcelada,
+          nomeComprador: compradorNome || nomeComprador,
+          nomeVendedor: vendedorNome || nomeVendedor,
+          notaAtendimento,
+          subContaCompradorId: subContaCompradorId || null,
+          subContaVendedorId: subContaVendedorId || null,
+          valorAdicional,
+          observacaoNota,
+          ofertaId,
+          saldoUtilizado: saldoUtilizado || "",
+          status: "Concluída",
+        },
+      });
+
+      // 5. Criar cobranças parceladas dentro da transação atômica
+      if (numeroParcelas > 0 && comissaoParcelada > 0) {
+        const dataAtual = new Date();
+        const diaFechamentoFatura = contaComprador!.diaFechamentoFatura;
+
+        let dataVencimento = new Date(
+          dataAtual.getFullYear(),
+          dataAtual.getMonth(),
+          contaComprador!.dataVencimentoFatura
+        );
+
+        if (dataAtual.getDate() >= contaComprador!.diaFechamentoFatura) {
+          dataVencimento.setMonth(dataVencimento.getMonth() + 1);
+        }
+
+        const cobrancasData = [];
+        for (let i = 1; i <= numeroParcelas; i++) {
+          cobrancasData.push({
+            valorFatura: comissaoParcelada,
+            referencia: `Transação #${novaTransacao.idTransacao} - Parcela ${i}`,
+            status: "Emitida",
+            transacaoId: novaTransacao.idTransacao,
+            usuarioId: novaTransacao.compradorId,
+            contaId: contaComprador!.idConta,
+            vencimentoFatura: dataVencimento,
+            gerenteContaId: contaComprador!.gerenteContaId,
+          });
+        }
+
+        // Criar todas as cobranças em lote
+        await tx.cobranca.createMany({
+          data: cobrancasData
+        });
+
+        console.log(`💳 ${numeroParcelas} cobranças criadas dentro da transação atômica`);
+      }
+
+      return { novaTransacao, comprador, vendedor };
+    }, {
+      maxWait: 10000, // 10 segundos máximo de espera
+      timeout: 30000, // 30 segundos timeout
+      isolationLevel: 'Serializable' // Nível mais alto de isolamento
+    });
+
+      // Retornar dados da transação criada
+      return { novaTransacao, comprador, vendedor };
     }
+  );
+
+  // 🔒 Processar resultado da operação com lock
+  if (!resultado.sucesso) {
+    console.error(`❌ Transação falhou:`, resultado.erro);
+    return res.status(400).json({ 
+      error: resultado.erro,
+      lockObtido: resultado.lockObtido,
+      tempoEspera: resultado.tempoEspera 
+    });
+  }
+
+  const { novaTransacao, comprador, vendedor } = resultado.resultado!;
+  console.log(`✅ Transação concluída com sistema de locks: ID ${novaTransacao.idTransacao}`);
+
+  // Enviar emails de confirmação (fora do lock para não bloquear)
+  try {
+    const dataAtual = new Date();
 
     function formatarData(data: Date): string {
       const dia = String(data.getDate()).padStart(2, "0");
@@ -216,33 +303,33 @@ export const insertTransaction = async (req: Request, res: Response) => {
       return `${dia}/${mes}/${ano} ${horas}:${minutos}`;
     }
 
-    const dataFormatada = formatarData(new Date());
+    const dataFormatada = formatarData(dataAtual);
 
     const corpoEmailComprador =
-      `Olá ${comprador?.nome}, Obrigado por sua transação na plataforma RedeTrade. Abaixo estão os detalhes da transação:\n\n` +
-      `Data da transação: ${dataFormatada}\n` +
-      `Código da transação: ${novaTransacao.codigo}\n` +
-      `Valor da transação: R$ ${valorRt.toFixed(2)}\n` +
-      `Número de Parcelas: ${numeroParcelas}\n` +
-      `Descrição: ${descricao}\n` +
-      `Nome do Vendedor: ${nomeVendedor}\n` +
-      `Nota de Atendimento: ${notaAtendimento}\n` +
-      `Observações: ${observacaoNota}\n` +
-      `Status: ${novaTransacao.status}\n` +
+      `Olá ${comprador?.nome}, Obrigado por sua transação na plataforma RedeTrade. Abaixo estão os detalhes da transação:\\n\\n` +
+      `Data da transação: ${dataFormatada}\\n` +
+      `Código da transação: ${novaTransacao.codigo}\\n` +
+      `Valor da transação: R$ ${valorRt.toFixed(2)}\\n` +
+      `Número de Parcelas: ${numeroParcelas}\\n` +
+      `Descrição: ${descricao}\\n` +
+      `Nome do Vendedor: ${nomeVendedor}\\n` +
+      `Nota de Atendimento: ${notaAtendimento}\\n` +
+      `Observações: ${observacaoNota}\\n` +
+      `Status: ${novaTransacao.status}\\n` +
       `Agradecemos por usar a RedeTrade!`;
 
     const corpoEmailVendedor =
-      `Olá ${vendedor?.nome},Você recebeu uma nova transação na plataforma RedeTrade. Abaixo estão os detalhes da transação:\n\n` +
-      `Data da transação: ${dataFormatada}\n` +
-      `Código da transação: ${novaTransacao.codigo}\n` +
-      `Data da transação: ${Date.now()}\n` +
-      `Valor da transação: RT$ ${valorRt.toFixed(2)}\n` +
-      `Número de Parcelas: ${numeroParcelas}\n` +
-      `Descrição: ${descricao}\n` +
-      `Nome do Comprador: ${nomeComprador}\n` +
-      `Nota de Atendimento: ${notaAtendimento}\n` +
-      `Observações: ${observacaoNota}\n` +
-      `Status: ${novaTransacao.status}\n` +
+      `Olá ${vendedor?.nome},Você recebeu uma nova transação na plataforma RedeTrade. Abaixo estão os detalhes da transação:\\n\\n` +
+      `Data da transação: ${dataFormatada}\\n` +
+      `Código da transação: ${novaTransacao.codigo}\\n` +
+      `Data da transação: ${Date.now()}\\n` +
+      `Valor da transação: RT$ ${valorRt.toFixed(2)}\\n` +
+      `Número de Parcelas: ${numeroParcelas}\\n` +
+      `Descrição: ${descricao}\\n` +
+      `Nome do Comprador: ${nomeComprador}\\n` +
+      `Nota de Atendimento: ${notaAtendimento}\\n` +
+      `Observações: ${observacaoNota}\\n` +
+      `Status: ${novaTransacao.status}\\n` +
       `Agradecemos por usar a RedeTrade!`;
 
     const emailComprador = comprador?.email;
@@ -259,12 +346,16 @@ export const insertTransaction = async (req: Request, res: Response) => {
         "Confirmação de Transação - RedeTrade",
         corpoEmailVendedor
       );
-      return res.status(201).json({ novaTransacao, cobrancasParceladas });
     }
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erro ao cadastrar transação." });
+    return res.status(201).json({ novaTransacao });
+
+  } catch (emailError) {
+    console.error(`⚠️ Erro ao enviar emails (transação criada com sucesso):`, emailError);
+    return res.status(201).json({ 
+      novaTransacao,
+      avisoEmail: "Transação criada com sucesso, mas houve problema no envio de email"
+    });
   }
 };
 
@@ -397,24 +488,42 @@ export const visualizarTransacoesEstornoMatriz = async (
   }
 };
 export const estornarTransacao = async (req: Request, res: Response) => {
-  try {
-    const { idTransacao } = req.params;
+  const { idTransacao } = req.params;
 
-    // Busque a transação pelo ID
-    const transacao = await prisma.transacao.findUnique({
-      where: { idTransacao: Number(idTransacao) },
-    });
-
-    if (!transacao) {
-      return res.status(404).json({ error: "Transação não encontrada." });
+  // Busque a transação pelo ID primeiro (fora do lock para obter dados básicos)
+  const transacao = await prisma.transacao.findUnique({
+    where: { idTransacao: Number(idTransacao) },
+    select: {
+      compradorId: true,
+      vendedorId: true,
+      valorRt: true,
+      saldoUtilizado: true,
+      status: true
     }
-    const { compradorId, vendedorId, valorRt, saldoUtilizado } = transacao;
+  });
 
-    if (!compradorId || !vendedorId) {
-      return res
-        .status(400)
-        .json({ error: "ID do comprador ou vendedor ausente" });
-    }
+  if (!transacao) {
+    return res.status(404).json({ error: "Transação não encontrada." });
+  }
+
+  const { compradorId, vendedorId, valorRt, saldoUtilizado } = transacao;
+
+  if (!compradorId || !vendedorId) {
+    return res.status(400).json({ error: "ID do comprador ou vendedor ausente" });
+  }
+
+  if (transacao.status === "Estornada") {
+    return res.status(400).json({ error: "Transação já foi estornada" });
+  }
+
+  // 🔒 FASE 1.4 - Sistema de Locks: Executar estorno protegido por lock
+  console.log(`🔒 Iniciando estorno com sistema de locks: Transação ${idTransacao}`);
+  
+  const resultado = await executarComLockEstorno(
+    vendedorId, // Lock baseado no vendedor (quem terá saldo debitado)
+    Number(idTransacao),
+    async () => {
+      // Toda lógica do estorno fica dentro desta função protegida
 
     // Obtendo a conta do comprador
     const usuarioComprador = await prisma.usuarios.findUnique({
@@ -434,46 +543,6 @@ export const estornarTransacao = async (req: Request, res: Response) => {
 
     const contaComprador = usuarioComprador.conta;
 
-    // Restaurando os saldos
-    // Restaurando os saldos
-    if (saldoUtilizado) {
-      const saldoUtilizadoParts = saldoUtilizado.split("/");
-      let novoSaldoPermuta = contaComprador.saldoPermuta ?? 0;
-      let novoLimiteUtilizado = contaComprador.limiteUtilizado ?? 0;
-      let saldoPermutaUtilizado = 0;
-      let limiteUtilizado = 0;
-
-      await Promise.all(
-        saldoUtilizadoParts.map(async (part) => {
-          const [tipoSaldo, valorStr] = part.trim().split("-");
-          const valor = parseInt(valorStr);
-
-          if (tipoSaldo.trim() === "saldoPermuta") {
-            novoSaldoPermuta = (novoSaldoPermuta ?? 0) + valor;
-            saldoPermutaUtilizado = valor;
-          } else if (tipoSaldo.trim() === "limiteCredito") {
-            novoLimiteUtilizado -= valor;
-            limiteUtilizado = valor;
-          }
-        })
-      );
-
-      const novoLimiteDisponivel =
-        contaComprador.limiteCredito - novoLimiteUtilizado;
-      const saldoPermutaEstornar =
-        limiteUtilizado > 0 ? (novoSaldoPermuta ?? 0) + limiteUtilizado : novoSaldoPermuta ?? 0;
-
-      // Atualizar a conta com os novos saldos
-      await prisma.conta.update({
-        where: { idConta: contaComprador.idConta },
-        data: {
-          saldoPermuta: saldoPermutaEstornar,
-          limiteUtilizado: novoLimiteUtilizado,
-          limiteDisponivel: novoLimiteDisponivel,
-        },
-      });
-    }
-
     // Debitando do saldoPermuta do vendedor
     const usuarioVendedor = await prisma.usuarios.findUnique({
       where: { idUsuario: vendedorId },
@@ -489,50 +558,164 @@ export const estornarTransacao = async (req: Request, res: Response) => {
     }
 
     const contaVendedor = usuarioVendedor.conta;
-    await prisma.conta.update({
-      where: { idConta: contaVendedor.idConta },
-      data: {
-        saldoPermuta: (contaVendedor.saldoPermuta ?? 0) - valorRt,
-      },
-    });
 
-    // Excluir cobranças associadas à transação
-    await prisma.cobranca.deleteMany({
-      where: { transacaoId: Number(idTransacao) },
-    });
+    // 🔐 VALIDAÇÕES DE ESTORNO - Fase 1
+    console.log(`🔍 Validando estorno: ${formatarValorRT(valorRt)} da conta ${contaVendedor.numeroConta}`);
+    
+    const contaVendedorInfo: ContaInfo = {
+      idConta: contaVendedor.idConta,
+      saldoPermuta: contaVendedor.saldoPermuta,
+      limiteCredito: contaVendedor.limiteCredito,
+      limiteUtilizado: contaVendedor.limiteUtilizado,
+      limiteVendaMensal: contaVendedor.limiteVendaMensal,
+      limiteVendaTotal: contaVendedor.limiteVendaTotal,
+      limiteVendaEmpresa: contaVendedor.limiteVendaEmpresa,
+      valorVendaMensalAtual: contaVendedor.valorVendaMensalAtual,
+      valorVendaTotalAtual: contaVendedor.valorVendaTotalAtual,
+      diaFechamentoFatura: contaVendedor.diaFechamentoFatura,
+      dataVencimentoFatura: contaVendedor.dataVencimentoFatura,
+      numeroConta: contaVendedor.numeroConta,
+      dataDeAfiliacao: contaVendedor.dataDeAfiliacao,
+      nomeFranquia: contaVendedor.nomeFranquia,
+      tipoContaId: contaVendedor.tipoContaId,
+      planoId: contaVendedor.planoId,
+      gerenteContaId: contaVendedor.gerenteContaId
+    };
+    
+    const resultadoValidacaoEstorno = validarEstorno(contaVendedorInfo, valorRt);
+    
+    if (!resultadoValidacaoEstorno.valido) {
+      const erro = resultadoValidacaoEstorno.erro!;
+      
+      console.error(`❌ Estorno rejeitado: ${erro.tipo} - ${erro.message}`, {
+        transacaoId: idTransacao,
+        vendedorId,
+        valor: valorRt,
+        saldoAtual: contaVendedor.saldoPermuta
+      });
+      
+      return res.status(400).json({
+        error: erro.message,
+        tipo: erro.tipo,
+        detalhes: erro.detalhes
+      });
+    }
 
-    // Buscar os vouchers associados à transação
-    const vouchers = await prisma.voucher.findMany({
-      where: { transacaoId: Number(idTransacao) },
-    });
+    // 🔒 ESTORNO ATÔMICO - Executar todas as operações em uma única transação
+    console.log(`🔒 Executando estorno atômico para transação ${idTransacao}...`);
+    
+    await prisma.$transaction(async (tx) => {
+      // 1. Verificar se a transação ainda existe e pode ser estornada
+      const transacaoAtual = await tx.transacao.findUnique({
+        where: { idTransacao: Number(idTransacao) },
+        select: { status: true }
+      });
 
-    // Atualizar status e adicionar data de estorno nos vouchers
-    await Promise.all(
-      vouchers.map(async (voucher) => {
-        await prisma.voucher.update({
-          where: { idVoucher: voucher.idVoucher },
+      if (!transacaoAtual) {
+        throw new Error("Transação não encontrada");
+      }
+
+      if (transacaoAtual.status === "Estornada") {
+        throw new Error("Transação já foi estornada");
+      }
+
+      // 2. Atualizar conta do vendedor (debitar o valor estornado)
+      await tx.conta.update({
+        where: { idConta: contaVendedor.idConta },
+        data: {
+          saldoPermuta: (contaVendedor.saldoPermuta ?? 0) - valorRt,
+        },
+      });
+
+      // 3. Restaurar saldos do comprador usando nova estrutura
+      if (saldoUtilizado) {
+        console.log(`🔄 Restaurando saldos do comprador usando estrutura melhorada`);
+        
+        // 🔄 FASE 1.3 - Usar nova estrutura para parsear saldoUtilizado
+        const saldoDetalhado = parserarSaldoUtilizadoLegacy(saldoUtilizado);
+        
+        let novoSaldoPermuta = contaComprador.saldoPermuta ?? 0;
+        let novoLimiteUtilizado = contaComprador.limiteUtilizado ?? 0;
+
+        // Restaurar saldo permuta se foi utilizado
+        if (saldoDetalhado.saldoPermuta > 0) {
+          novoSaldoPermuta = novoSaldoPermuta + saldoDetalhado.saldoPermuta;
+          console.log(`💰 Restaurando saldo permuta: +${saldoDetalhado.saldoPermuta}`);
+        }
+
+        // Restaurar limite de crédito se foi utilizado
+        if (saldoDetalhado.limiteCredito > 0) {
+          novoLimiteUtilizado = novoLimiteUtilizado - saldoDetalhado.limiteCredito;
+          console.log(`💳 Restaurando limite crédito: -${saldoDetalhado.limiteCredito}`);
+        }
+
+        const novoLimiteDisponivel = contaComprador.limiteCredito - novoLimiteUtilizado;
+
+        console.log(`📊 Restauração completa:`, {
+          saldoPermutaAntes: contaComprador.saldoPermuta,
+          saldoPermutaDepois: novoSaldoPermuta,
+          limiteUtilizadoAntes: contaComprador.limiteUtilizado,
+          limiteUtilizadoDepois: novoLimiteUtilizado,
+          estruturaOriginal: saldoDetalhado
+        });
+
+        await tx.conta.update({
+          where: { idConta: contaComprador.idConta },
           data: {
-            status: "Cancelado",
-            dataCancelamento: new Date(),
+            saldoPermuta: novoSaldoPermuta,
+            limiteUtilizado: novoLimiteUtilizado,
+            limiteDisponivel: novoLimiteDisponivel,
           },
         });
-      })
-    );
+      }
 
-    // Atualizar status e adicionar data de estorno na transação
-    await prisma.transacao.update({
-      where: { idTransacao: Number(idTransacao) },
-      data: {
-        status: "Estornada",
-        dataDoEstorno: new Date(),
-      },
+      // 4. Excluir cobranças associadas à transação
+      await tx.cobranca.deleteMany({
+        where: { transacaoId: Number(idTransacao) },
+      });
+
+      // 5. Cancelar vouchers associados à transação
+      await tx.voucher.updateMany({
+        where: { transacaoId: Number(idTransacao) },
+        data: {
+          status: "Cancelado",
+          dataCancelamento: new Date(),
+        },
+      });
+
+      // 6. Atualizar status da transação
+      await tx.transacao.update({
+        where: { idTransacao: Number(idTransacao) },
+        data: {
+          status: "Estornada",
+          dataDoEstorno: new Date(),
+        },
+      });
+
+      console.log(`✅ Estorno atômico concluído: Transação ${idTransacao}`);
+    }, {
+      maxWait: 10000,
+      timeout: 30000,
+      isolationLevel: 'Serializable'
     });
 
-    return res.status(200).json({ message: "Transação estornada com sucesso" });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erro ao estornar transação." });
+      // Retornar sucesso
+      return { message: "Transação estornada com sucesso" };
+    }
+  );
+
+  // 🔒 Processar resultado da operação de estorno com lock
+  if (!resultado.sucesso) {
+    console.error(`❌ Estorno falhou:`, resultado.erro);
+    return res.status(400).json({ 
+      error: resultado.erro,
+      lockObtido: resultado.lockObtido,
+      tempoEspera: resultado.tempoEspera 
+    });
   }
+
+  console.log(`✅ Estorno concluído com sistema de locks: Transação ${idTransacao}`);
+  return res.status(200).json(resultado.resultado);
 };
 // Controlador para listar todas as transações estornadas
 export const listarTransacoesEstornadas = async (

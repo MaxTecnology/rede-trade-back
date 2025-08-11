@@ -8,7 +8,8 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction) => 
   if (!token) { 
     return res.status(401).json({ error: "Token não fornecido." });
   }
- const secret = process.env.SECRET || "";
+  
+  const secret = process.env.SECRET || "";
 
   jwt.verify(token, secret, (err: any, decoded: any) => {
     if (err) {

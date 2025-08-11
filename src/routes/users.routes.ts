@@ -43,7 +43,6 @@ userRouter.get('/listar-usuarios', apiRateLimit, async (req: Request, res: Respo
       account 
     } = req.query;
 
-    console.log('🔍 Parâmetros recebidos:', req.query);
     
     // Validação e conversão de parâmetros
     const pageNumber = Math.max(1, parseInt(page as string, 10) || 1);
@@ -102,8 +101,6 @@ userRouter.get('/listar-usuarios', apiRateLimit, async (req: Request, res: Respo
       whereClause.AND[0].conta.numeroConta = { contains: account.trim(), mode: 'insensitive' };
     }
 
-    console.log('📊 Filtros aplicados (whereClause):', JSON.stringify(whereClause, null, 2));
-    console.log('🔍 Parâmetro de busca específico:', { search, searchType: typeof search, searchTrimmed: typeof search === 'string' ? search.trim() : '' });
 
     // Buscar os usuários com os relacionamentos desejados e aplicar a paginação + filtros - OTIMIZADO
     const usuarios = await prisma.usuarios.findMany({
@@ -140,7 +137,6 @@ userRouter.get('/listar-usuarios', apiRateLimit, async (req: Request, res: Respo
       where: whereClause
     });
 
-    console.log(`📈 Associados encontrados: ${usuarios.length} de ${totalUsuarios} total (Página ${pageNumber})`);
 
     // Omitir senha dos usuários na resposta
     const usuariosSemSenha = usuarios.map((usuario) => ({ 
@@ -186,7 +182,6 @@ userRouter.get('/listar-gerentes', async (req: Request, res: Response) => {
       cidade 
     } = req.query;
 
-    console.log('🔍 Listando gerentes com filtros:', { search, estado, cidade });
     
     const pageNumber = Math.max(1, parseInt(page as string, 10) || 1);
     const pageSizeNumber = Math.min(100, Math.max(1, parseInt(pageSize as string, 10) || 60));
@@ -257,7 +252,6 @@ userRouter.get('/listar-gerentes', async (req: Request, res: Response) => {
     // Contar total
     const totalGerentes = await prisma.usuarios.count({ where: whereClause });
 
-    console.log(`✅ Encontrados ${gerentes.length} gerentes de ${totalGerentes} total`);
 
     // Remover dados sensíveis
     const gerentesSemSenha = gerentes.map((gerente) => ({
@@ -341,9 +335,6 @@ userRouter.put("/atualizar-usuario-completo/:id",
     try {
       const { id } = req.params;
       
-      console.log('🚀 === INÍCIO ATUALIZAÇÃO USUÁRIO ===');
-      console.log('🆔 ID do usuário:', id);
-      console.log('📁 Arquivos enviados:', req.files ? req.files.length : 0);
 
       // Extrair todos os dados do body
       const dadosRecebidos = { ...req.body };
@@ -352,7 +343,6 @@ userRouter.put("/atualizar-usuario-completo/:id",
       const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
       if (imagemFile) {
         dadosRecebidos.imagem = `/uploads/images/${imagemFile.filename}`;
-        console.log('📸 Imagem processada:', dadosRecebidos.imagem);
       }
 
       // MAPEAMENTO CORRETO BASEADO NO SCHEMA REAL
@@ -398,17 +388,13 @@ userRouter.put("/atualizar-usuario-completo/:id",
         } else if (camposConta.includes(key)) {
           dadosConta[key] = dadosRecebidos[key];
         } else {
-          console.log(`⚠️ Campo não mapeado: ${key} = ${dadosRecebidos[key]}`);
         }
       });
 
-      console.log('👤 Dados do usuário:', Object.keys(dadosUsuario));
-      console.log('💳 Dados da conta:', Object.keys(dadosConta));
 
       // Remover duplicações no tipo
       if (Array.isArray(dadosUsuario.tipo)) {
         dadosUsuario.tipo = dadosUsuario.tipo[0];
-        console.log('🔧 Tipo corrigido para:', dadosUsuario.tipo);
       }
 
       // Usar transação
@@ -423,11 +409,6 @@ userRouter.put("/atualizar-usuario-completo/:id",
           throw new Error("Usuário não encontrado");
         }
 
-        console.log('✅ Usuário encontrado:', {
-          id: usuarioExiste.idUsuario,
-          nome: usuarioExiste.nome,
-          temConta: !!usuarioExiste.conta
-        });
 
         // Atualizar usuário se há dados
         let usuarioAtualizado = usuarioExiste;
@@ -468,18 +449,12 @@ userRouter.put("/atualizar-usuario-completo/:id",
             }
           });
           
-          console.log('📝 Dados processados para usuário:', {
-            campos: Object.keys(dadosProcessados),
-            temImagem: !!dadosProcessados.imagem,
-            taxaComissaoGerente: dadosProcessados.taxaComissaoGerente
-          });
 
           usuarioAtualizado = await prisma.usuarios.update({
             where: { idUsuario: parseInt(id, 10) },
             data: dadosProcessados,
           }) as any;
           
-          console.log('✅ Usuário atualizado no banco');
         }
 
         // Atualizar conta se há dados e conta existe
@@ -514,14 +489,12 @@ userRouter.put("/atualizar-usuario-completo/:id",
             }
           });
           
-          console.log('💰 Dados processados para conta:', Object.keys(dadosContaProcessados));
 
           contaAtualizada = await prisma.conta.update({
             where: { idConta: usuarioExiste.conta.idConta },
             data: dadosContaProcessados,
           });
           
-          console.log('✅ Conta atualizada no banco');
         }
 
         return { usuario: usuarioAtualizado, conta: contaAtualizada };
@@ -535,8 +508,6 @@ userRouter.put("/atualizar-usuario-completo/:id",
         conta: resultado.conta
       };
 
-      console.log('🎉 Atualização concluída com sucesso!');
-      console.log('🚀 === FIM ATUALIZAÇÃO USUÁRIO ===');
       
       return res.status(200).json(resposta);
     } catch (error: any) {
@@ -567,12 +538,8 @@ userRouter.put("/atualizar-usuario-completo/:id",
       if (imagemFile) {
         if (!dadosUsuario) dadosUsuario = {};
         dadosUsuario.imagem = `/uploads/images/${imagemFile.filename}`;
-        console.log("📸 Nova imagem do usuário completo enviada:", imagemFile.filename);
       }
 
-      console.log("Atualizando usuário completo ID:", id);
-      console.log("Dados usuário:", dadosUsuario);
-      console.log("Dados conta:", dadosConta);
 
       // Usar transação para garantir consistência
       const resultado = await prisma.$transaction(async (prisma) => {
@@ -615,7 +582,6 @@ userRouter.put("/atualizar-usuario-completo/:id",
         conta: resultado.conta
       };
 
-      console.log("✅ Usuário e conta atualizados com sucesso:", resultado.usuario.nome);
       return res.status(200).json(resposta);
     } catch (error) {
       console.error("❌ Erro ao atualizar usuário completo:", error);
@@ -823,7 +789,6 @@ userRouter.post("/redefinir-senha-usuario/:idUsuario",  async (req: Request, res
     try {
       const { idUsuario } = req.params;
       const { novaSenha, token } = req.body;
-console.log(novaSenha,token,"ID USUARIO:", idUsuario)
       // Verificar se o token de redefinição de senha é válido
       const usuario = await prisma.usuarios.findUnique({
         where: {
@@ -912,7 +877,6 @@ userRouter.post("/login", async (req: Request, res: Response) => {
     }
     const secret = process.env.SECRET || ""
     // Gerar token JWT usando a chave secreta do ambiente
-    console.log(secret);
     const token = jwt.sign({ userId: userId }, secret, {
       expiresIn: "1h",
     });
@@ -1104,18 +1068,44 @@ userRouter.get('/usuarios-criados/:usuarioCriadorId', listarUsuariosAssociados);
 
 userRouter.get('/buscar-usuario-params', BuscarUsuariosParams);
 
-// Rota para bloquear usuário
+// Rota para bloquear usuário (SEM checkBlocked - Matriz pode estar bloqueado)
 userRouter.post('/bloquear-usuario/:id', 
   authRateLimit,
   verifyToken, 
-  checkBlocked, 
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const userId = parseInt(id, 10);
+      const requestUserId = res.locals.userId; // ID do usuário que está fazendo a requisição
 
       if (!userId || isNaN(userId)) {
         return res.status(400).json({ error: "ID do usuário inválido." });
+      }
+
+      // Verificar se o usuário que está fazendo a requisição tem permissão (deve ser Matriz)
+      const usuarioRequisitante = await prisma.usuarios.findUnique({
+        where: { idUsuario: requestUserId },
+        include: {
+          conta: {
+            include: {
+              tipoDaConta: true
+            }
+          }
+        }
+      });
+
+      if (!usuarioRequisitante) {
+        return res.status(404).json({ error: 'Usuário requisitante não encontrado.' });
+      }
+
+      // Verificar se o usuário é Matriz - APENAS Matriz pode bloquear outros usuários
+      const isMatriz = usuarioRequisitante.tipo === 'Matriz' || 
+                      usuarioRequisitante.conta?.tipoDaConta?.tipoDaConta === 'Matriz';
+      
+      if (!isMatriz) {
+        return res.status(403).json({ 
+          error: `Acesso negado. Apenas usuários Matriz podem bloquear outros usuários. Seu tipo: ${usuarioRequisitante.tipo}` 
+        });
       }
 
       // Verificar se o usuário existe
@@ -1142,8 +1132,7 @@ userRouter.post('/bloquear-usuario/:id',
       // Invalidar cache do middleware de bloqueio
       invalidateUserBlockCache(userId);
 
-      console.log(`✅ Usuário ${usuarioAtualizado.nome} (ID: ${userId}) foi bloqueado`);
-      
+        
       return res.status(200).json({
         message: 'Usuário bloqueado com sucesso.',
         usuario: usuarioAtualizado
@@ -1158,18 +1147,44 @@ userRouter.post('/bloquear-usuario/:id',
   }
 );
 
-// Rota para desbloquear usuário
+// Rota para desbloquear usuário (SEM checkBlocked - Matriz pode estar bloqueado)
 userRouter.post('/desbloquear-usuario/:id', 
   authRateLimit,
   verifyToken, 
-  checkBlocked, 
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const userId = parseInt(id, 10);
+      const requestUserId = res.locals.userId; // ID do usuário que está fazendo a requisição
 
       if (!userId || isNaN(userId)) {
         return res.status(400).json({ error: "ID do usuário inválido." });
+      }
+
+      // Verificar se o usuário que está fazendo a requisição tem permissão (deve ser Matriz)
+      const usuarioRequisitante = await prisma.usuarios.findUnique({
+        where: { idUsuario: requestUserId },
+        include: {
+          conta: {
+            include: {
+              tipoDaConta: true
+            }
+          }
+        }
+      });
+
+      if (!usuarioRequisitante) {
+        return res.status(404).json({ error: 'Usuário requisitante não encontrado.' });
+      }
+
+      // Verificar se o usuário é Matriz - APENAS Matriz pode desbloquear outros usuários
+      const isMatriz = usuarioRequisitante.tipo === 'Matriz' || 
+                      usuarioRequisitante.conta?.tipoDaConta?.tipoDaConta === 'Matriz';
+      
+      if (!isMatriz) {
+        return res.status(403).json({ 
+          error: `Acesso negado. Apenas usuários Matriz podem desbloquear outros usuários. Seu tipo: ${usuarioRequisitante.tipo}` 
+        });
       }
 
       // Verificar se o usuário existe
@@ -1196,8 +1211,7 @@ userRouter.post('/desbloquear-usuario/:id',
       // Invalidar cache do middleware de bloqueio
       invalidateUserBlockCache(userId);
 
-      console.log(`✅ Usuário ${usuarioAtualizado.nome} (ID: ${userId}) foi desbloqueado`);
-      
+        
       return res.status(200).json({
         message: 'Usuário desbloqueado com sucesso.',
         usuario: usuarioAtualizado
