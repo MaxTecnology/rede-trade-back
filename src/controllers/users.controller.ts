@@ -113,7 +113,10 @@ export const criarUsuario = [
         taxaGerente,
         dataVencimentoFatura,
         planoId,
-        gerente
+        gerente,
+        formaPagamento,
+        saldoDinheiro,
+        saldoPermuta
       } = req.body;
 
       // Verificar se tem imagem enviada e definir o caminho
@@ -372,21 +375,61 @@ export const criarUsuario = [
           // Gerar número único para a conta com prefixo ASS
           const numeroConta = await gerarNumeroConta('ASS');
 
+          // Calcular saldo inicial baseado na forma de pagamento e plano
+          let saldoPermutaInicial = 0;
+          let limiteUtilizadoInicial = 0;
+          let limiteCreditoCalculado = limiteCredito ? parseFloat(limiteCredito.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 5000;
+
+          // Aplicar débito baseado na forma de pagamento
+          if (planoId && formaPagamento) {
+            const plano = await prisma.plano.findUnique({
+              where: { idPlano: parseInt(planoId, 10) }
+            });
+
+            if (plano) {
+              let valorDebito = 0;
+
+              if (formaPagamento === "100") {
+                // 100% permuta - debita valor total do plano
+                valorDebito = plano.taxaInscricao;
+              } else if (formaPagamento === "50") {
+                // Permuta/Dinheiro - usa valor informado no campo saldoPermuta
+                if (saldoPermuta) {
+                  valorDebito = parseFloat(saldoPermuta.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+                }
+              }
+              // formaPagamento === "0" (dinheiro) - não aplica débito
+
+              if (valorDebito > 0) {
+                // Aplicar débito no saldoPermuta (fica negativo)
+                saldoPermutaInicial = -valorDebito;
+                
+                // Se limite de crédito for 0, usar o valor do débito como limite e como utilizado
+                if (limiteCreditoCalculado === 0) {
+                  limiteCreditoCalculado = valorDebito;
+                  limiteUtilizadoInicial = valorDebito;
+                } else if (limiteCreditoCalculado >= valorDebito) {
+                  limiteUtilizadoInicial = valorDebito;
+                }
+              }
+            }
+          }
+
           // Dados da conta para associado
           const dadosConta = {
             numeroConta: numeroConta,
             tipoContaId: tipoContaId, // Busca dinâmica
             usuarioId: novoUsuario.idUsuario,
             nomeFranquia: nomeFantasia || nome,
-            limiteCredito: limiteCredito ? parseFloat(limiteCredito.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 5000, // Limite padrão para associados
+            limiteCredito: limiteCreditoCalculado,
             taxaRepasseMatriz: 0, // Associados não têm taxa de repasse
             dataVencimentoFatura: 10, // Padrão
             diaFechamentoFatura: 25, // Padrão
             planoId: planoId ? parseInt(planoId, 10) : 1, // Plano básico como padrão
             gerenteContaId: gerente ? parseInt(gerente, 10) : null,
-            // Valores padrão para associados
-            limiteUtilizado: 0,
-            saldoPermuta: 0,
+            // Valores calculados baseados na forma de pagamento
+            limiteUtilizado: limiteUtilizadoInicial,
+            saldoPermuta: saldoPermutaInicial,
             saldoDinheiro: 0,
             limiteVendaMensal: 50000, // Limite menor para associados
             limiteVendaTotal: 200000, // Limite menor para associados
