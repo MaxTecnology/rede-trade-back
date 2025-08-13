@@ -30,7 +30,7 @@ userRouter.post("/criar-usuario",
 );
 
 // Rota para listar todos os usuários com paginação
-userRouter.get('/listar-usuarios', apiRateLimit, async (req: Request, res: Response) => {
+userRouter.get('/listar-usuarios', apiRateLimit, verifyToken, async (req: Request, res: Response) => {
   try {
     const { 
       page = 1, 
@@ -43,6 +43,8 @@ userRouter.get('/listar-usuarios', apiRateLimit, async (req: Request, res: Respo
       account 
     } = req.query;
 
+    // Obter ID do usuário logado para excluir da listagem
+    const usuarioLogadoId = res.locals.userId;
     
     // Validação e conversão de parâmetros
     const pageNumber = Math.max(1, parseInt(page as string, 10) || 1);
@@ -60,6 +62,12 @@ userRouter.get('/listar-usuarios', apiRateLimit, async (req: Request, res: Respo
             tipoDaConta: {
               tipoDaConta: "Associado"
             }
+          }
+        },
+        // NOVO FILTRO: Excluir o próprio usuário logado
+        {
+          idUsuario: {
+            not: usuarioLogadoId
           }
         }
       ]
@@ -1066,7 +1074,11 @@ userRouter.get('/buscar-franquias/:matrizId', buscarFranquiasPorMatriz);
 
 userRouter.get('/usuarios-criados/:usuarioCriadorId', listarUsuariosAssociados);
 
-userRouter.get('/buscar-usuario-params', BuscarUsuariosParams);
+userRouter.get('/buscar-usuario-params', verifyToken, (req: Request, res: Response) => {
+  // Adicionar userId aos query params para excluir o próprio usuário
+  (req as any).excludeUserId = res.locals.userId;
+  return BuscarUsuariosParams(req, res);
+});
 
 // Rota para bloquear usuário (SEM checkBlocked - Matriz pode estar bloqueado)
 userRouter.post('/bloquear-usuario/:id', 

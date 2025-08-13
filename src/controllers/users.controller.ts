@@ -684,6 +684,14 @@ export async function BuscarUsuariosParams(req: Request, res: Response) {
       }
     }
 
+    // Excluir o próprio usuário logado da listagem
+    const excludeUserId = (req as any).excludeUserId;
+    if (excludeUserId) {
+      filter["idUsuario"] = {
+        not: excludeUserId
+      };
+    }
+
     // Realizar a consulta no banco com paginação
     const [users, totalUsers] = await Promise.all([
       prisma.usuarios.findMany({
