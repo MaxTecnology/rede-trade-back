@@ -69,6 +69,7 @@ model Usuarios {
   subcategoria                     Subcategoria?        @relation("UsuarioToSubcategoria", fields: [subcategoriaId], references: [idSubcategoria])
   usuarioCriador                   Usuarios?            @relation("UsuariosToUsuarioCriador", fields: [usuarioCriadorId], references: [idUsuario])
   usuariosCriados                  Usuarios[]           @relation("UsuariosToUsuarioCriador")
+  auditorias                       AuditoriaFinanceira[] @relation("AuditoriaToUsuario")
 }
 
 model Conta {
@@ -252,6 +253,7 @@ model Transacao {
   subContaComprador              SubContas?     @relation("CompradorToSubConta", fields: [subContaCompradorId], references: [idSubContas], map: "transacaoSubContaCompradorId")
   subContaVendedor               SubContas?     @relation("VendedorToSubConta", fields: [subContaVendedorId], references: [idSubContas], map: "transacaoSubContaVendedorId")
   voucher                        Voucher[]
+  auditorias                     AuditoriaFinanceira[] @relation("AuditoriaToTransacao")
 }
 
 model Parcelamento {
@@ -321,4 +323,36 @@ model FundoPermuta {
   valor          Float
   usuarioId      Int
   usuario        Usuarios @relation("UsuarioToFundoPermuta", fields: [usuarioId], references: [idUsuario])
+}
+
+// FASE 2.1 - Sistema de Auditoria Financeira
+model AuditoriaFinanceira {
+  id                 String   @id @default(uuid())
+  timestamp          DateTime @default(now())
+  usuarioId          Int?
+  usuarioExecutor    String?  // Nome ou identificação de quem executou
+  acao               String   // "TRANSACAO", "ESTORNO", "AJUSTE_SALDO", "CRIAR_COBRANCA"
+  entidade           String   // "TRANSACAO", "CONTA", "COBRANCA", "VOUCHER"
+  entidadeId         Int?     // ID da entidade afetada
+  dadosAnteriores    Json?    // Estado anterior dos dados
+  dadosNovos         Json?    // Estado novo dos dados
+  valorOperacao      Float?   // Valor da operação financeira
+  contasAfetadas     Json?    // Array com IDs das contas afetadas
+  transacaoId        Int?     // ID da transação relacionada (se aplicável)
+  ipAddress          String?
+  userAgent          String?
+  detalhesOperacao   String?  // Descrição detalhada da operação
+  resultado          String   // "SUCESSO", "ERRO", "PENDENTE"
+  tempoExecucao      Int?     // Tempo de execução em ms
+  sessionId          String?  // ID da sessão do usuário
+  
+  // Relacionamentos
+  usuario            Usuarios? @relation("AuditoriaToUsuario", fields: [usuarioId], references: [idUsuario])
+  transacao          Transacao? @relation("AuditoriaToTransacao", fields: [transacaoId], references: [idTransacao])
+
+  @@index([timestamp])
+  @@index([usuarioId])
+  @@index([acao])
+  @@index([transacaoId])
+  @@index([resultado])
 }

@@ -14,7 +14,7 @@ import {
 } from "../controllers/users.controller";
 import { checkBlocked, invalidateUserBlockCache } from "../middlewares/checkBlocked.middleware";
 import { upload } from "../middlewares/upload"; // Importar o middleware de upload
-import { authRateLimit, apiRateLimit } from "../middlewares/rateLimit.middleware"; // Rate limiting
+import { authRateLimit, apiRateLimit, clearRateLimit } from "../middlewares/rateLimit.middleware"; // Rate limiting
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 
 const userRouter = Router();
@@ -1070,7 +1070,7 @@ userRouter.get('/buscar-usuario-params', BuscarUsuariosParams);
 
 // Rota para bloquear usuário (SEM checkBlocked - Matriz pode estar bloqueado)
 userRouter.post('/bloquear-usuario/:id', 
-  authRateLimit,
+  apiRateLimit, // Mudança: usar apiRateLimit (100 req/15min) ao invés de authRateLimit (10 req/15min)
   verifyToken, 
   async (req: Request, res: Response) => {
     try {
@@ -1149,7 +1149,7 @@ userRouter.post('/bloquear-usuario/:id',
 
 // Rota para desbloquear usuário (SEM checkBlocked - Matriz pode estar bloqueado)
 userRouter.post('/desbloquear-usuario/:id', 
-  authRateLimit,
+  apiRateLimit, // Mudança: usar apiRateLimit (100 req/15min) ao invés de authRateLimit (10 req/15min)
   verifyToken, 
   async (req: Request, res: Response) => {
     try {
@@ -1225,5 +1225,13 @@ userRouter.post('/desbloquear-usuario/:id',
     }
   }
 );
+
+// Rota para limpar rate limit (APENAS PARA DESENVOLVIMENTO)
+if (process.env.NODE_ENV === 'development') {
+  userRouter.post('/clear-rate-limit', (req: Request, res: Response) => {
+    clearRateLimit();
+    res.json({ message: 'Rate limit cache limpo com sucesso' });
+  });
+}
 
 export default userRouter;

@@ -204,7 +204,7 @@ export async function seedUsuarios(prisma: PrismaClient) {
   const gerenteRegional = await prisma.usuarios.create({
     data: {
       nome: "Paula Mendes Regional",
-      cpf: "99999999999",
+      cpf: "10101010101",
       email: "gerente.regional@example.com",
       senha: await bcrypt.hash("123456", 10),
       imagem: "gerente_regional.png",
@@ -212,7 +212,7 @@ export async function seedUsuarios(prisma: PrismaClient) {
       reputacao: 4.5,
       razaoSocial: "PM Gestão Regional LTDA",
       nomeFantasia: "PM Regional",
-      cnpj: "99999999000199",
+      cnpj: "10101010000110",
       inscEstadual: "999999999",
       inscMunicipal: "999999999",
       mostrarNoSite: true,
@@ -255,7 +255,7 @@ export async function seedUsuarios(prisma: PrismaClient) {
   const operador = await prisma.usuarios.create({
     data: {
       nome: "José Silva Operador",
-      cpf: "12345678901",
+      cpf: "20202020202",
       email: "operador@example.com",
       senha: await bcrypt.hash("123456", 10),
       imagem: "operador.png",
@@ -263,7 +263,7 @@ export async function seedUsuarios(prisma: PrismaClient) {
       reputacao: 4.2,
       razaoSocial: "JS Operações ME",
       nomeFantasia: "JS Operações",
-      cnpj: "12345678000112",
+      cnpj: "20202020000120",
       inscEstadual: "123456789",
       inscMunicipal: "123456789",
       mostrarNoSite: true,
@@ -304,7 +304,7 @@ export async function seedUsuarios(prisma: PrismaClient) {
   const supervisorContas = await prisma.usuarios.create({
     data: {
       nome: "Amanda Oliveira Supervisor",
-      cpf: "09876543210",
+      cpf: "30303030303",
       email: "supervisor.contas@example.com",
       senha: await bcrypt.hash("123456", 10),
       imagem: "supervisor_contas.png",
@@ -312,7 +312,7 @@ export async function seedUsuarios(prisma: PrismaClient) {
       reputacao: 4.7,
       razaoSocial: "AO Supervisão LTDA",
       nomeFantasia: "AO Supervisão",
-      cnpj: "09876543000109",
+      cnpj: "30303030000130",
       inscEstadual: "098765432",
       inscMunicipal: "098765432",
       mostrarNoSite: true,
@@ -356,7 +356,7 @@ export async function seedUsuarios(prisma: PrismaClient) {
   const associadoBloqueado = await prisma.usuarios.create({
     data: {
       nome: "Roberto Santos Bloqueado",
-      cpf: "55544433322",
+      cpf: "40404040404",
       email: "associado.bloqueado@example.com",
       senha: await bcrypt.hash("123456", 10),
       imagem: "associado_bloqueado.png",
@@ -364,7 +364,7 @@ export async function seedUsuarios(prisma: PrismaClient) {
       reputacao: 2.1,
       razaoSocial: "RS Bloqueado ME",
       nomeFantasia: "RS Bloqueado",
-      cnpj: "55544433000155",
+      cnpj: "40404040000140",
       inscEstadual: "555444333",
       inscMunicipal: "555444333",
       mostrarNoSite: false,

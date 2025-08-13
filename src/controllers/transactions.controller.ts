@@ -4,6 +4,7 @@ import { enviarEmailTransacao } from "../utils/utils";
 import { validarTransacao, validarEstorno, ErroFinanceiro, TipoErroFinanceiro, formatarValorRT, criarSaldoUtilizado, converterParaStringLegacy, parserarSaldoUtilizadoLegacy } from "../utils/financial-validations";
 import { executarTransacaoFinanceira, calcularOperacoesTransacao, DadosNovaTransacao } from "../utils/transaction-manager";
 import { executarComLockTransacao, executarComLockEstorno } from "../utils/transaction-locks";
+import { AuditoriaFinanceira, TipoAcao, TipoEntidade, ResultadoOperacao } from "../utils/auditoria-financeira";
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 
 export const insertTransaction = async (req: Request, res: Response) => {
@@ -22,6 +23,10 @@ export const insertTransaction = async (req: Request, res: Response) => {
     observacaoNota,
     ofertaId,
   } = req.body;
+
+  // 📋 FASE 2.1 - Auditoria: Registrar início da operação
+  const inicioTempo = Date.now();
+  console.log(`📋 Iniciando auditoria de transação: Comprador ${compradorId} → Vendedor ${vendedorId}`);
 
   // 🔒 FASE 1.4 - Sistema de Locks: Executar toda operação protegida por lock
   console.log(`🔒 Iniciando transação com sistema de locks: Comprador ${compradorId} → Vendedor ${vendedorId}`);
@@ -279,6 +284,28 @@ export const insertTransaction = async (req: Request, res: Response) => {
   // 🔒 Processar resultado da operação com lock
   if (!resultado.sucesso) {
     console.error(`❌ Transação falhou:`, resultado.erro);
+    
+    // 📋 FASE 2.1 - Auditoria: Registrar transação com erro
+    const tempoExecucao = Date.now() - inicioTempo;
+    await AuditoriaFinanceira.registrar({
+      usuarioId: compradorId,
+      acao: TipoAcao.TRANSACAO,
+      entidade: TipoEntidade.TRANSACAO,
+      dadosNovos: {
+        compradorId,
+        vendedorId,
+        valorRt,
+        erro: resultado.erro,
+        lockObtido: resultado.lockObtido
+      },
+      valorOperacao: valorRt,
+      contasAfetadas: [compradorId, vendedorId],
+      detalhesOperacao: `Transação falhou: ${resultado.erro}`,
+      resultado: ResultadoOperacao.ERRO,
+      tempoExecucao,
+      req
+    });
+
     return res.status(400).json({ 
       error: resultado.erro,
       lockObtido: resultado.lockObtido,
@@ -288,6 +315,29 @@ export const insertTransaction = async (req: Request, res: Response) => {
 
   const { novaTransacao, comprador, vendedor } = resultado.resultado!;
   console.log(`✅ Transação concluída com sistema de locks: ID ${novaTransacao.idTransacao}`);
+
+  // 📋 FASE 2.1 - Auditoria: Registrar transação bem-sucedida
+  const tempoExecucao = Date.now() - inicioTempo;
+  await AuditoriaFinanceira.auditarTransacao({
+    usuarioId: compradorId, // Quem iniciou a transação
+    transacaoId: novaTransacao.idTransacao,
+    compradorId,
+    vendedorId, 
+    valorOperacao: valorRt,
+    dadosCompletos: {
+      transacao: novaTransacao,
+      valorRt,
+      numeroParcelas,
+      descricao,
+      nomeComprador: comprador?.nome,
+      nomeVendedor: vendedor?.nome
+    },
+    resultado: ResultadoOperacao.SUCESSO,
+    req,
+    tempoExecucao
+  });
+
+  console.log(`📋 Auditoria de transação registrada: ID ${novaTransacao.idTransacao} em ${tempoExecucao}ms`);
 
   // Enviar emails de confirmação (fora do lock para não bloquear)
   try {
@@ -489,6 +539,10 @@ export const visualizarTransacoesEstornoMatriz = async (
 };
 export const estornarTransacao = async (req: Request, res: Response) => {
   const { idTransacao } = req.params;
+
+  // 📋 FASE 2.1 - Auditoria: Registrar início da operação de estorno
+  const inicioTempo = Date.now();
+  console.log(`📋 Iniciando auditoria de estorno: Transação ${idTransacao}`);
 
   // Busque a transação pelo ID primeiro (fora do lock para obter dados básicos)
   const transacao = await prisma.transacao.findUnique({
@@ -707,6 +761,26 @@ export const estornarTransacao = async (req: Request, res: Response) => {
   // 🔒 Processar resultado da operação de estorno com lock
   if (!resultado.sucesso) {
     console.error(`❌ Estorno falhou:`, resultado.erro);
+    
+    // 📋 FASE 2.1 - Auditoria: Registrar estorno com erro
+    const tempoExecucao = Date.now() - inicioTempo;
+    await AuditoriaFinanceira.registrar({
+      usuarioId: vendedorId,
+      acao: TipoAcao.ESTORNO,
+      entidade: TipoEntidade.TRANSACAO,
+      entidadeId: Number(idTransacao),
+      dadosAnteriores: {
+        transacaoOriginal: { compradorId, vendedorId, valorRt, saldoUtilizado }
+      },
+      valorOperacao: valorRt,
+      contasAfetadas: [compradorId, vendedorId],
+      transacaoId: Number(idTransacao),
+      detalhesOperacao: `Estorno falhou: ${resultado.erro}`,
+      resultado: ResultadoOperacao.ERRO,
+      tempoExecucao,
+      req
+    });
+
     return res.status(400).json({ 
       error: resultado.erro,
       lockObtido: resultado.lockObtido,
@@ -714,7 +788,31 @@ export const estornarTransacao = async (req: Request, res: Response) => {
     });
   }
 
+  // 📋 FASE 2.1 - Auditoria: Registrar estorno bem-sucedido
+  const tempoExecucao = Date.now() - inicioTempo;
+  await AuditoriaFinanceira.auditarEstorno({
+    usuarioId: vendedorId, // Quem teve o saldo debitado
+    transacaoId: Number(idTransacao),
+    valorOperacao: valorRt,
+    dadosAnteriores: {
+      transacaoOriginal: {
+        compradorId,
+        vendedorId,
+        valorRt,
+        saldoUtilizado,
+        status: transacao.status
+      }
+    },
+    contasAfetadas: [compradorId, vendedorId],
+    motivo: `Estorno solicitado via API`,
+    resultado: ResultadoOperacao.SUCESSO,
+    req,
+    tempoExecucao
+  });
+
   console.log(`✅ Estorno concluído com sistema de locks: Transação ${idTransacao}`);
+  console.log(`📋 Auditoria de estorno registrada: Transação ${idTransacao} em ${tempoExecucao}ms`);
+  
   return res.status(200).json(resultado.resultado);
 };
 // Controlador para listar todas as transações estornadas

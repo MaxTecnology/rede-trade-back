@@ -54,3 +54,12 @@ export const createRateLimit = (maxRequests: number, windowMs: number) => {
 export const authRateLimit = createRateLimit(10, 15 * 60 * 1000); // 10 tentativas em 15 min
 export const apiRateLimit = createRateLimit(100, 15 * 60 * 1000); // 100 req em 15 min
 export const strictRateLimit = createRateLimit(20, 60 * 1000); // 20 req por minuto
+
+// Função para limpar cache (útil para debugging)
+export const clearRateLimit = (identifier?: string) => {
+  if (identifier) {
+    rateLimitStore.delete(identifier);
+  } else {
+    rateLimitStore.clear();
+  }
+};

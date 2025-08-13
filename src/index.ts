@@ -13,6 +13,7 @@ import billingRouter from "./routes/billing.routes";
 import creditRouter from "./routes/credit.routes";
 import dashboardRouter from "./routes/dashboard.routes";
 import voucherRouters from "./routes/vouchers.routes";
+import auditoriaRouter from "./routes/auditoria.routes"; // FASE 2.1 - Sistema de Auditoria
 
 dotenv.config();
 
@@ -55,6 +56,7 @@ app.use("/cobrancas", billingRouter);
 app.use("/creditos", creditRouter);
 app.use("/dashboard", dashboardRouter);
 app.use("/vouchers", voucherRouters)
+app.use("/auditoria", auditoriaRouter); // FASE 2.1 - Sistema de Auditoria
 
 //const PORT = process.env.PORT || 3001;
 
