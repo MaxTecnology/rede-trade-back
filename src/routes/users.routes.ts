@@ -305,10 +305,16 @@ userRouter.get('/buscar-usuario/:id', async (req: Request, res: Response) => {
                 telefone:true,
                 celular:true,
                 site:true,
+                idUsuario:true,
+                taxaComissaoGerente:true,
               }
             },
+            tipoDaConta: true,
+            plano: true,
           }
         },
+        categoria: true,
+        subcategoria: true,
         contasGerenciadas: true,
         ofertas: true,
         transacoesComprador: true,
@@ -532,22 +538,82 @@ userRouter.put("/atualizar-usuario-completo/:id",
   }
 );
 
-// Nova rota para atualizar usuário e conta de forma transacional - ATUALIZADA COM UPLOAD
+// Nova rota para atualizar usuário e conta de forma transacional - ATUALIZADA COM UPLOAD E DADOS DIRETOS
 userRouter.put("/atualizar-usuario-completo/:id", 
   upload.any(), // Middleware de upload flexível
   verifyToken, 
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      let { dadosUsuario, dadosConta } = req.body;
-
+      const formData = req.body;
+      
+      // Processamento dos dados recebidos
+      
       // Se uma nova imagem foi enviada, adicionar aos dados do usuário
       const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
       if (imagemFile) {
-        if (!dadosUsuario) dadosUsuario = {};
-        dadosUsuario.imagem = `/uploads/images/${imagemFile.filename}`;
+        formData.imagem = `/uploads/images/${imagemFile.filename}`;
       }
 
+      // Separar campos de usuário e conta
+      const camposUsuario = [
+        'nome', 'cpf', 'email', 'imagem', 'statusConta', 'reputacao',
+        'razaoSocial', 'nomeFantasia', 'cnpj', 'inscEstadual', 'inscMunicipal',
+        'mostrarNoSite', 'descricao', 'tipo', 'nomeContato', 'telefone', 'celular',
+        'emailContato', 'emailSecundario', 'site', 'logradouro', 'numero', 'cep',
+        'complemento', 'bairro', 'cidade', 'estado', 'regiao', 'aceitaOrcamento',
+        'aceitaVoucher', 'tipoOperacao', 'categoriaId', 'subcategoriaId', 'restricao',
+        'bloqueado', 'status'
+      ];
+
+      const camposConta = [
+        'limiteCredito', 'limiteVendaMensal', 'limiteVendaTotal', 'limiteVendaEmpresa',
+        'valorVendaMensalAtual', 'valorVendaTotalAtual', 'taxaRepasseMatriz',
+        'diaFechamentoFatura', 'dataVencimentoFatura', 'nomeFranquia', 'planoId',
+        'gerenteContaId', 'taxaGerenteConta', 'gerente'
+      ];
+
+      // Processar dados do usuário
+      const dadosUsuario: any = {};
+      const dadosConta: any = {};
+
+      Object.keys(formData).forEach(key => {
+        const value = formData[key];
+        
+        if (camposUsuario.includes(key)) {
+          // Processar valores booleanos
+          if (value === 'true') dadosUsuario[key] = true;
+          else if (value === 'false') dadosUsuario[key] = false;
+          // Processar números
+          else if (['categoriaId', 'subcategoriaId', 'numero', 'tipoOperacao'].includes(key) && value !== '') {
+            dadosUsuario[key] = parseInt(value);
+          }
+          // Processar floats
+          else if (['reputacao'].includes(key) && value !== '') {
+            dadosUsuario[key] = parseFloat(value);
+          }
+          else if (value !== '' && value !== null && value !== undefined) {
+            dadosUsuario[key] = value;
+          }
+        } else if (camposConta.includes(key)) {
+          // Processar campos da conta
+          if (key === 'taxaGerenteConta' && formData.taxaGerenteConta) {
+            dadosConta.taxaComissaoGerente = parseFloat(formData.taxaGerenteConta);
+          } else if (['planoId', 'diaFechamentoFatura', 'dataVencimentoFatura', 'taxaRepasseMatriz'].includes(key) && value !== '') {
+            dadosConta[key] = parseInt(value);
+          } else if (['limiteCredito', 'limiteVendaMensal', 'limiteVendaTotal', 'limiteVendaEmpresa', 
+                    'valorVendaMensalAtual', 'valorVendaTotalAtual'].includes(key) && value !== '') {
+            dadosConta[key] = parseFloat(value);
+          } else if (value !== '' && value !== null && value !== undefined) {
+            dadosConta[key] = value;
+          }
+        }
+      });
+
+      // Tratamento especial para gerente
+      if (formData.gerente !== undefined) {
+        dadosConta.gerenteContaId = formData.gerente !== '' ? parseInt(formData.gerente) : null;
+      }
 
       // Usar transação para garantir consistência
       const resultado = await prisma.$transaction(async (prisma) => {
@@ -563,7 +629,7 @@ userRouter.put("/atualizar-usuario-completo/:id",
 
         // Atualizar dados do usuário se fornecidos
         let usuarioAtualizado = usuarioExiste;
-        if (dadosUsuario && Object.keys(dadosUsuario).length > 0) {
+        if (Object.keys(dadosUsuario).length > 0) {
           usuarioAtualizado = await prisma.usuarios.update({
             where: { idUsuario: parseInt(id, 10) },
             data: dadosUsuario,
@@ -572,7 +638,7 @@ userRouter.put("/atualizar-usuario-completo/:id",
 
         // Atualizar dados da conta se fornecidos e conta existir
         let contaAtualizada = usuarioExiste.conta;
-        if (dadosConta && Object.keys(dadosConta).length > 0 && usuarioExiste.conta) {
+        if (Object.keys(dadosConta).length > 0 && usuarioExiste.conta) {
           contaAtualizada = await prisma.conta.update({
             where: { idConta: usuarioExiste.conta.idConta },
             data: dadosConta,
@@ -913,7 +979,16 @@ userRouter.get('/user-info', verifyToken, async (_req: Request, res: Response) =
             tipoDaConta:true,
             idConta:true,
             cobrancas:true, 
-            gerenteConta:true,
+            gerenteConta: {
+              select: {
+                idUsuario: true,
+                nome: true,
+                nomeFantasia: true,
+                taxaComissaoGerente: true,
+                email: true,
+                tipo: true
+              }
+            },
             nomeFranquia:true,
             dataDeAfiliacao:true,
             dataVencimentoFatura:true,

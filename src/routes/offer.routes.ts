@@ -36,9 +36,7 @@ offerRouter.post(
   checkBlocked,
   async (req: Request, res: Response) => {
     try {
-      console.log('➕ DEBUG TEMPORÁRIO: Recebendo cadastro de oferta, userId:', res.locals.userId);
-      console.log('📋 DEBUG TEMPORÁRIO: Dados recebidos no body:', req.body);
-      console.log('📎 DEBUG TEMPORÁRIO: Arquivos recebidos:', req.files);
+      // Logs removidos para produção
       const userId = res.locals.userId; // Obter userId do token
 
       // Obter dados da oferta do corpo da requisição
@@ -90,20 +88,19 @@ offerRouter.post(
       // Definir status como true por padrão, a menos que seja explicitamente false
       const finalStatus = (status === 'false' || status === false) ? false : true;
 
-      console.log('🔍 DEBUG TEMPORÁRIO: Verificando duplicatas...');
+      // Verificando duplicatas...
       // Verificar se já existe uma oferta com o mesmo nome e mesmo valor
       const ofertaExistente = await prisma.oferta.findFirst({
         where: { titulo, valor: parseFloat(valor) },
       });
 
       if (ofertaExistente) {
-        console.log('❌ DEBUG TEMPORÁRIO: Oferta duplicada encontrada');
+        // Oferta duplicada encontrada
         return res.status(400).json({
           error: "Já existe uma oferta com o mesmo nome e valor.",
         });
       }
-      console.log('✅ DEBUG TEMPORÁRIO: Nenhuma duplicata encontrada');
-      console.log('🗄️ DEBUG TEMPORÁRIO: Criando oferta no banco...');
+      // Criando oferta no banco...
 
       const novaOferta = await prisma.oferta.create({
         data: {
@@ -129,7 +126,7 @@ offerRouter.post(
         },
       });
 
-      console.log('✅ DEBUG TEMPORÁRIO: Oferta criada com sucesso:', novaOferta.titulo, 'ID:', novaOferta.idOferta);
+      // Oferta criada com sucesso
       res.status(201).json(novaOferta);
     } catch (error: any) {
       console.error('❌ DEBUG TEMPORÁRIO: Erro ao cadastrar oferta:', error);
@@ -150,7 +147,7 @@ offerRouter.post(
 // Rota para listar ofertas com filtros hierárquicos
 offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Request, res: Response) => {
   try {
-    console.log('🔍 DEBUG TEMPORÁRIO: Requisição recebida para listar ofertas, userId:', res.locals.userId);
+    // Requisição para listar ofertas
     const userId = res.locals.userId; // Do middleware verifyToken
     const { 
       page = 1, 
@@ -302,7 +299,7 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
     };
 
 
-    console.log('🔍 DEBUG TEMPORÁRIO: Where clause final:', JSON.stringify(whereClauseComStatus, null, 2));
+    // Executando consulta de ofertas
     
     const ofertas = await prisma.oferta.findMany({
       where: whereClauseComStatus,
@@ -349,8 +346,7 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
 
     const totalOfertas = await prisma.oferta.count({ where: whereClauseComStatus });
     
-    console.log('📊 DEBUG TEMPORÁRIO: Ofertas encontradas:', ofertas.length, 'de', totalOfertas, 'total');
-    console.log('📋 DEBUG TEMPORÁRIO: Títulos das ofertas:', ofertas.map(o => o.titulo));
+    // Consulta executada com sucesso
 
     // Criar objeto meta com informações de paginação
     const meta = {
