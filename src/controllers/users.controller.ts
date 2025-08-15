@@ -116,7 +116,10 @@ export const criarUsuario = [
         gerente,
         formaPagamento,
         saldoDinheiro,
-        saldoPermuta
+        saldoPermuta,
+        limiteVendaMensal,
+        limiteVendaTotal,
+        limiteVendaEmpresa
       } = req.body;
 
       // Verificar se tem imagem enviada e definir o caminho
