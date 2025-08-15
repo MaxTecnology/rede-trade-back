@@ -347,13 +347,13 @@ export const criarUsuario = [
             diaFechamentoFatura: 25, // Padrão
             planoId: planoId ? parseInt(planoId, 10) : null,
             gerenteContaId: usuarioCriadorId ? parseInt(usuarioCriadorId, 10) : null,
-            // Valores padrão
+            // Valores do formulário ou padrão
             limiteUtilizado: 0,
-            saldoPermuta: 0,
-            saldoDinheiro: 0,
-            limiteVendaMensal: 100000, // Padrão
-            limiteVendaTotal: 500000, // Padrão
-            limiteVendaEmpresa: 250000, // Padrão
+            saldoPermuta: saldoPermuta ? parseFloat(saldoPermuta.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 0,
+            saldoDinheiro: saldoDinheiro ? parseFloat(saldoDinheiro.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 0,
+            limiteVendaMensal: limiteVendaMensal ? parseFloat(limiteVendaMensal.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 100000,
+            limiteVendaTotal: limiteVendaTotal ? parseFloat(limiteVendaTotal.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 500000,
+            limiteVendaEmpresa: limiteVendaEmpresa ? parseFloat(limiteVendaEmpresa.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 250000,
             valorVendaMensalAtual: 0,
             valorVendaTotalAtual: 0,
             dataDeAfiliacao: new Date(),
@@ -430,10 +430,10 @@ export const criarUsuario = [
             // Valores calculados baseados na forma de pagamento
             limiteUtilizado: limiteUtilizadoInicial,
             saldoPermuta: saldoPermutaInicial,
-            saldoDinheiro: 0,
-            limiteVendaMensal: 50000, // Limite menor para associados
-            limiteVendaTotal: 200000, // Limite menor para associados
-            limiteVendaEmpresa: 100000, // Limite menor para associados
+            saldoDinheiro: saldoDinheiro ? parseFloat(saldoDinheiro.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 0,
+            limiteVendaMensal: limiteVendaMensal ? parseFloat(limiteVendaMensal.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 50000,
+            limiteVendaTotal: limiteVendaTotal ? parseFloat(limiteVendaTotal.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 200000,
+            limiteVendaEmpresa: limiteVendaEmpresa ? parseFloat(limiteVendaEmpresa.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 100000,
             valorVendaMensalAtual: 0,
             valorVendaTotalAtual: 0,
             dataDeAfiliacao: new Date(),

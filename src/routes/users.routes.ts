@@ -1012,6 +1012,8 @@ userRouter.get('/user-info', verifyToken, async (_req: Request, res: Response) =
             valorVendaTotalAtual:true, // TOD ******************************* //
           }
         },
+        categoria: true, // ADICIONADO: Para consistência com buscar-usuario
+        subcategoria: true, // ADICIONADO: Para consistência com buscar-usuario
         transacoesComprador: true,
         transacoesVendedor: true,
         cobrancas: true,
@@ -1024,6 +1026,8 @@ userRouter.get('/user-info', verifyToken, async (_req: Request, res: Response) =
 
     // Omitir senha do usuário
     const { senha,tokenResetSenha, ...userWithoutPassword } = user;
+
+    // Debug logs removidos - funcionando corretamente
 
     res.status(200).json(userWithoutPassword);
   } catch (error) {
