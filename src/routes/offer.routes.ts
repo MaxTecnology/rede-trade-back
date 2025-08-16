@@ -79,7 +79,7 @@ offerRouter.post(
       }
 
       // Se uma nova imagem foi enviada, usar seu caminho
-      const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
+      const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagens') : null;
       if (imagemFile) {
         const imagePath = `/uploads/images/${imagemFile.filename}`;
         imagens = [imagePath]; // Array com a nova imagem
@@ -313,9 +313,12 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
         descricao: true,
         quantidade: true,
         valor: true,
+        limiteCompra: true,
         vencimento: true,
         cidade: true,
         estado: true,
+        retirada: true,
+        obs: true,
         imagens: true,
         createdAt: true,
         categoria: {
@@ -346,6 +349,13 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
 
     const totalOfertas = await prisma.oferta.count({ where: whereClauseComStatus });
     
+    // DEBUG TEMPORÁRIO: Log dos dados antes de retornar
+    console.log('🔍 DEBUG: Total ofertas encontradas:', ofertas.length);
+    if (ofertas.length > 0) {
+      console.log('🔍 DEBUG: Primeira oferta completa:', JSON.stringify(ofertas[0], null, 2));
+      console.log('🔍 DEBUG: limiteCompra da primeira oferta:', ofertas[0].limiteCompra);
+    }
+    
     // Consulta executada com sucesso
 
     // Criar objeto meta com informações de paginação
@@ -357,6 +367,17 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
       hasNext: Number(page) * Number(limit) < totalOfertas,
       hasPrev: Number(page) > 1
     };
+
+    // DEBUG FINAL: Log da resposta completa antes de enviar
+    console.log('🚀 ENVIANDO RESPOSTA:', { 
+      totalOfertas: ofertas.length,
+      primeiraOferta: ofertas[0] ? {
+        id: ofertas[0].idOferta,
+        titulo: ofertas[0].titulo,
+        limiteCompra: ofertas[0].limiteCompra,
+        temLimiteCompra: 'limiteCompra' in ofertas[0]
+      } : null
+    });
 
     res.status(200).json({ ofertas, meta });
   } catch (error: any) { // Adicionado : any para tipagem do erro
@@ -456,7 +477,7 @@ offerRouter.put(
       }
 
       // Se uma nova imagem foi enviada, atualizar o array de imagens
-      const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
+      const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagens') : null;
       if (imagemFile) {
         const imagePath = `/uploads/images/${imagemFile.filename}`;
         updateData.imagens = [imagePath]; // Array com a nova imagem
