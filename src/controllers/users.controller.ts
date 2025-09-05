@@ -124,9 +124,13 @@ export const criarUsuario = [
 
       // Verificar se tem imagem enviada e definir o caminho
       let imagemPath: string | null = null;
-      const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
-      if (imagemFile) {
-        imagemPath = `/uploads/images/${imagemFile.filename}`;
+      
+      // Com upload.single('imagem'), o arquivo fica em req.file (singular)
+      if (req.file) {
+        imagemPath = `/uploads/images/${req.file.filename}`;
+        console.log("📸 Imagem processada:", req.file.filename, "-> Path:", imagemPath);
+      } else {
+        console.log("⚠️  Nenhuma imagem enviada no req.file");
       }
 
       if (typeof senha !== "string") {
@@ -312,6 +316,8 @@ export const criarUsuario = [
           tipoOperacao: tipoOperacao ? parseInt(tipoOperacao, 10) : 1,
           categoriaId: categoriaId ? parseInt(categoriaId, 10) : null,
           subcategoriaId: subcategoriaId ? parseInt(subcategoriaId, 10) : null,
+          // CORREÇÃO: Salvar taxaGerente como taxaComissaoGerente (em centésimos)
+          taxaComissaoGerente: taxaGerente ? Math.round(parseFloat(taxaGerente) * 100) : 0,
         };
 
         // Adicionar campos específicos se usuarioCriadorId existir
@@ -345,7 +351,7 @@ export const criarUsuario = [
             usuarioId: novoUsuario.idUsuario,
             nomeFranquia: nomeFantasia || nome,
             limiteCredito: limiteCredito ? parseFloat(limiteCredito.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 0,
-            taxaRepasseMatriz: taxaGerente ? parseInt(taxaGerente, 10) : 0,
+            taxaRepasseMatriz: 0, // CORREÇÃO: taxaGerente agora vai para taxaComissaoGerente na tabela Usuarios
             dataVencimentoFatura: dataVencimentoFatura ? parseInt(dataVencimentoFatura, 10) : 10,
             diaFechamentoFatura: 25, // Padrão
             planoId: planoId ? parseInt(planoId, 10) : null,

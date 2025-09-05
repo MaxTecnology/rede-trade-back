@@ -1,5 +1,5 @@
 // routes/users.routes.ts
-import { Request, Response, Router } from "express";
+import { Request, Response, Router, NextFunction } from "express";
 import bcrypt from "bcrypt";
 import { enviarEmail, gerarToken } from "../utils/utils";
 import * as jwt from "jsonwebtoken";
@@ -14,7 +14,9 @@ import {
 } from "../controllers/users.controller";
 import { checkBlocked, invalidateUserBlockCache } from "../middlewares/checkBlocked.middleware";
 import { upload } from "../middlewares/upload"; // Importar o middleware de upload
-import { authRateLimit, apiRateLimit, clearRateLimit } from "../middlewares/rateLimit.middleware"; // Rate limiting
+import { authRateLimit, apiRateLimit, clearRateLimit } from "../middlewares/rateLimit.middleware"; // Rate limiting DESABILITADO
+import { validateUsuario } from "../middlewares/validateUsuario.middleware"; // Middleware de validação
+import { validateUsuarioEdicao } from "../middlewares/validateUsuarioEdicao.middleware"; // Middleware de validação para edição
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 
 const userRouter = Router();
@@ -24,9 +26,15 @@ userRouter.post('/upload-imagem', upload.any(), uploadImagem);
 
 // Rota para criar um usuário com upload de imagem
 userRouter.post("/criar-usuario", 
-  authRateLimit, // Rate limiting para criação de usuários
+  authRateLimit, // Rate limiting DESABILITADO para testes
   /*verifyToken, checkBlocked, */
-  criarUsuario // A função criarUsuario já tem o middleware de upload internamente
+  upload.single('imagem'), // Parse FormData primeiro
+  validateUsuario, // ✅ Validação após parse do FormData
+  async (req: Request, res: Response, next: NextFunction) => {
+    // Chamar a função original mas sem o upload middleware (já foi executado)
+    const [_, originalFunction] = criarUsuario;
+    return originalFunction(req, res, next);
+  }
 );
 
 // Rota para listar todos os usuários com paginação
@@ -261,11 +269,13 @@ userRouter.get('/listar-gerentes', async (req: Request, res: Response) => {
     const totalGerentes = await prisma.usuarios.count({ where: whereClause });
 
 
-    // Remover dados sensíveis
+    // Remover dados sensíveis e converter taxaComissaoGerente
     const gerentesSemSenha = gerentes.map((gerente) => ({
       ...gerente,
       senha: undefined,
-      tokenResetSenha: undefined
+      tokenResetSenha: undefined,
+      // CONVERSÃO: taxaComissaoGerente de centésimos para percentual (21.65)
+      taxaComissaoGerente: gerente.taxaComissaoGerente ? gerente.taxaComissaoGerente / 100 : 0
     }));
 
     return res.status(200).json({
@@ -328,8 +338,13 @@ userRouter.get('/buscar-usuario/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
-    // Omitir senha do usuário na resposta
-    const usuarioSemSenha = { ...usuario, senha: undefined };
+    // Omitir senha do usuário na resposta e converter taxaComissaoGerente
+    const usuarioSemSenha = { 
+      ...usuario, 
+      senha: undefined,
+      // CONVERSÃO: De centésimos para percentual (21.65)
+      taxaComissaoGerente: usuario.taxaComissaoGerente ? usuario.taxaComissaoGerente / 100 : 0
+    };
 
     return res.status(200).json(usuarioSemSenha);
   } catch (error) {
@@ -348,6 +363,99 @@ userRouter.put("/atualizar-usuario-completo/:id",
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
+      
+      // ✅ VALIDAÇÃO PARA EDIÇÃO DE ASSOCIADOS
+      const { nome, cpf, email, senha } = req.body;
+      
+      // Validar email se presente
+      if (email !== undefined) {
+        if (!email || !email.trim()) {
+          return res.status(400).json({ 
+            error: "Email não pode estar vazio",
+            field: "email"
+          });
+        }
+        
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email.trim())) {
+          return res.status(400).json({ 
+            error: "Email deve ter um formato válido",
+            field: "email"
+          });
+        }
+      }
+      
+      // Validar nome se presente  
+      if (nome !== undefined) {
+        if (!nome || !nome.trim()) {
+          return res.status(400).json({ 
+            error: "Nome não pode estar vazio",
+            field: "nome"
+          });
+        }
+        
+        if (nome.trim().length < 2) {
+          return res.status(400).json({ 
+            error: "Nome deve ter pelo menos 2 caracteres",
+            field: "nome"
+          });
+        }
+      }
+      
+      // Validar CPF se presente
+      if (cpf !== undefined) {
+        if (!cpf || !cpf.trim()) {
+          return res.status(400).json({ 
+            error: "CPF não pode estar vazio",
+            field: "cpf"
+          });
+        }
+        
+        const cleanCPF = cpf.replace(/[.\-]/g, '');
+        if (!/^\d{11}$/.test(cleanCPF)) {
+          return res.status(400).json({ 
+            error: "CPF deve ter um formato válido",
+            field: "cpf"
+          });
+        }
+      }
+      
+      // Validar senha se presente
+      if (senha !== undefined) {
+        if (!senha || !senha.trim()) {
+          return res.status(400).json({ 
+            error: "Senha não pode estar vazia",
+            field: "senha"
+          });
+        }
+        
+        if (senha.length < 6) {
+          return res.status(400).json({ 
+            error: "Senha deve ter no mínimo 6 caracteres",
+            field: "senha"
+          });
+        }
+      }
+      
+      // Sanitizar dados maliciosos
+      const sanitizeString = (str: string) => {
+        if (!str) return '';
+        return str
+          .trim()
+          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+          .replace(/javascript:/gi, '')
+          .replace(/on\w+\s*=/gi, '')
+          .substring(0, 255);
+      };
+      
+      if (nome !== undefined) req.body.nome = sanitizeString(nome);
+      if (email !== undefined) req.body.email = email.trim().toLowerCase();
+      const camposTexto = ['razaoSocial', 'nomeFantasia', 'descricao'];
+      camposTexto.forEach(campo => {
+        if (req.body[campo] !== undefined) {
+          req.body[campo] = sanitizeString(req.body[campo]);
+        }
+      });
       
 
       // Extrair todos os dados do body
@@ -411,17 +519,18 @@ userRouter.put("/atualizar-usuario-completo/:id",
         dadosUsuario.tipo = dadosUsuario.tipo[0];
       }
 
+      // Verificar se o usuário existe ANTES da transação
+      const usuarioExiste = await prisma.usuarios.findUnique({
+        where: { idUsuario: parseInt(id, 10) },
+        include: { conta: true }
+      });
+
+      if (!usuarioExiste) {
+        return res.status(404).json({ error: "Usuário não encontrado" });
+      }
+
       // Usar transação
       const resultado = await prisma.$transaction(async (prisma) => {
-        // Verificar se o usuário existe
-        const usuarioExiste = await prisma.usuarios.findUnique({
-          where: { idUsuario: parseInt(id, 10) },
-          include: { conta: true }
-        });
-
-        if (!usuarioExiste) {
-          throw new Error("Usuário não encontrado");
-        }
 
 
         // Atualizar usuário se há dados
@@ -429,24 +538,59 @@ userRouter.put("/atualizar-usuario-completo/:id",
         if (Object.keys(dadosUsuario).length > 0) {
           const dadosProcessados: any = { ...dadosUsuario };
           
-          // Converter tipos conforme schema
-          if (dadosProcessados.numero && dadosProcessados.numero !== '') {
-            dadosProcessados.numero = parseInt(dadosProcessados.numero, 10); // Int no schema
+          // ✅ CONVERSÃO SEGURA DE TIPOS - CORRIGIDO
+          if (dadosProcessados.numero !== undefined) {
+            const numeroValue = parseInt(dadosProcessados.numero, 10);
+            if (!isNaN(numeroValue)) {
+              dadosProcessados.numero = numeroValue;
+            } else {
+              delete dadosProcessados.numero; // Remove se inválido
+            }
           }
-          if (dadosProcessados.tipoOperacao && dadosProcessados.tipoOperacao !== '') {
-            dadosProcessados.tipoOperacao = parseInt(dadosProcessados.tipoOperacao, 10); // Int no schema
+          
+          if (dadosProcessados.tipoOperacao !== undefined) {
+            const tipoValue = parseInt(dadosProcessados.tipoOperacao, 10);
+            if (!isNaN(tipoValue)) {
+              dadosProcessados.tipoOperacao = tipoValue;
+            } else {
+              delete dadosProcessados.tipoOperacao; // Remove se inválido
+            }
           }
-          if (dadosProcessados.reputacao && dadosProcessados.reputacao !== '') {
-            dadosProcessados.reputacao = parseFloat(dadosProcessados.reputacao); // Float no schema
+          
+          if (dadosProcessados.reputacao !== undefined) {
+            const repValue = parseFloat(dadosProcessados.reputacao);
+            if (!isNaN(repValue)) {
+              dadosProcessados.reputacao = repValue;
+            } else {
+              delete dadosProcessados.reputacao; // Remove se inválido
+            }
           }
-          if (dadosProcessados.taxaComissaoGerente && dadosProcessados.taxaComissaoGerente !== '') {
-            dadosProcessados.taxaComissaoGerente = parseInt(dadosProcessados.taxaComissaoGerente, 10); // Int no schema
+          
+          if (dadosProcessados.taxaComissaoGerente !== undefined) {
+            const taxaValue = Math.round(parseFloat(dadosProcessados.taxaComissaoGerente) * 100);
+            if (!isNaN(taxaValue)) {
+              dadosProcessados.taxaComissaoGerente = taxaValue;
+            } else {
+              delete dadosProcessados.taxaComissaoGerente; // Remove se inválido
+            }
           }
-          if (dadosProcessados.categoriaId && dadosProcessados.categoriaId !== '') {
-            dadosProcessados.categoriaId = parseInt(dadosProcessados.categoriaId, 10);
+          
+          if (dadosProcessados.categoriaId !== undefined) {
+            const catValue = parseInt(dadosProcessados.categoriaId, 10);
+            if (!isNaN(catValue)) {
+              dadosProcessados.categoriaId = catValue;
+            } else {
+              delete dadosProcessados.categoriaId; // Remove se inválido
+            }
           }
-          if (dadosProcessados.subcategoriaId && dadosProcessados.subcategoriaId !== '') {
-            dadosProcessados.subcategoriaId = parseInt(dadosProcessados.subcategoriaId, 10);
+          
+          if (dadosProcessados.subcategoriaId !== undefined) {
+            const subCatValue = parseInt(dadosProcessados.subcategoriaId, 10);
+            if (!isNaN(subCatValue)) {
+              dadosProcessados.subcategoriaId = subCatValue;
+            } else {
+              delete dadosProcessados.subcategoriaId; // Remove se inválido
+            }
           }
           
           // Converter booleanos conforme schema
@@ -514,11 +658,13 @@ userRouter.put("/atualizar-usuario-completo/:id",
         return { usuario: usuarioAtualizado, conta: contaAtualizada };
       });
 
-      // Resposta final
+      // Resposta final com conversão de taxaComissaoGerente
       const resposta = {
         ...resultado.usuario,
         senha: undefined,
         tokenResetSenha: undefined,
+        // CONVERSÃO: taxaComissaoGerente de centésimos para percentual (21.65)
+        taxaComissaoGerente: resultado.usuario.taxaComissaoGerente ? resultado.usuario.taxaComissaoGerente / 100 : 0,
         conta: resultado.conta
       };
 
@@ -538,133 +684,6 @@ userRouter.put("/atualizar-usuario-completo/:id",
   }
 );
 
-// Nova rota para atualizar usuário e conta de forma transacional - ATUALIZADA COM UPLOAD E DADOS DIRETOS
-userRouter.put("/atualizar-usuario-completo/:id", 
-  upload.any(), // Middleware de upload flexível
-  verifyToken, 
-  async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      const formData = req.body;
-      
-      // Processamento dos dados recebidos
-      
-      // Se uma nova imagem foi enviada, adicionar aos dados do usuário
-      const imagemFile = Array.isArray(req.files) ? req.files.find((file: any) => file.fieldname === 'imagem') : null;
-      if (imagemFile) {
-        formData.imagem = `/uploads/images/${imagemFile.filename}`;
-      }
-
-      // Separar campos de usuário e conta
-      const camposUsuario = [
-        'nome', 'cpf', 'email', 'imagem', 'statusConta', 'reputacao',
-        'razaoSocial', 'nomeFantasia', 'cnpj', 'inscEstadual', 'inscMunicipal',
-        'mostrarNoSite', 'descricao', 'tipo', 'nomeContato', 'telefone', 'celular',
-        'emailContato', 'emailSecundario', 'site', 'logradouro', 'numero', 'cep',
-        'complemento', 'bairro', 'cidade', 'estado', 'regiao', 'aceitaOrcamento',
-        'aceitaVoucher', 'tipoOperacao', 'categoriaId', 'subcategoriaId', 'restricao',
-        'bloqueado', 'status'
-      ];
-
-      const camposConta = [
-        'limiteCredito', 'limiteVendaMensal', 'limiteVendaTotal', 'limiteVendaEmpresa',
-        'valorVendaMensalAtual', 'valorVendaTotalAtual', 'taxaRepasseMatriz',
-        'diaFechamentoFatura', 'dataVencimentoFatura', 'nomeFranquia', 'planoId',
-        'gerenteContaId', 'taxaGerenteConta', 'gerente'
-      ];
-
-      // Processar dados do usuário
-      const dadosUsuario: any = {};
-      const dadosConta: any = {};
-
-      Object.keys(formData).forEach(key => {
-        const value = formData[key];
-        
-        if (camposUsuario.includes(key)) {
-          // Processar valores booleanos
-          if (value === 'true') dadosUsuario[key] = true;
-          else if (value === 'false') dadosUsuario[key] = false;
-          // Processar números
-          else if (['categoriaId', 'subcategoriaId', 'numero', 'tipoOperacao'].includes(key) && value !== '') {
-            dadosUsuario[key] = parseInt(value);
-          }
-          // Processar floats
-          else if (['reputacao'].includes(key) && value !== '') {
-            dadosUsuario[key] = parseFloat(value);
-          }
-          else if (value !== '' && value !== null && value !== undefined) {
-            dadosUsuario[key] = value;
-          }
-        } else if (camposConta.includes(key)) {
-          // Processar campos da conta
-          if (key === 'taxaGerenteConta' && formData.taxaGerenteConta) {
-            dadosConta.taxaComissaoGerente = parseFloat(formData.taxaGerenteConta);
-          } else if (['planoId', 'diaFechamentoFatura', 'dataVencimentoFatura', 'taxaRepasseMatriz'].includes(key) && value !== '') {
-            dadosConta[key] = parseInt(value);
-          } else if (['limiteCredito', 'limiteVendaMensal', 'limiteVendaTotal', 'limiteVendaEmpresa', 
-                    'valorVendaMensalAtual', 'valorVendaTotalAtual'].includes(key) && value !== '') {
-            dadosConta[key] = parseFloat(value);
-          } else if (value !== '' && value !== null && value !== undefined) {
-            dadosConta[key] = value;
-          }
-        }
-      });
-
-      // Tratamento especial para gerente
-      if (formData.gerente !== undefined) {
-        dadosConta.gerenteContaId = formData.gerente !== '' ? parseInt(formData.gerente) : null;
-      }
-
-      // Usar transação para garantir consistência
-      const resultado = await prisma.$transaction(async (prisma) => {
-        // Verificar se o usuário existe
-        const usuarioExiste = await prisma.usuarios.findUnique({
-          where: { idUsuario: parseInt(id, 10) },
-          include: { conta: true }
-        });
-
-        if (!usuarioExiste) {
-          throw new Error("Usuário não encontrado");
-        }
-
-        // Atualizar dados do usuário se fornecidos
-        let usuarioAtualizado = usuarioExiste;
-        if (Object.keys(dadosUsuario).length > 0) {
-          usuarioAtualizado = await prisma.usuarios.update({
-            where: { idUsuario: parseInt(id, 10) },
-            data: dadosUsuario,
-          }) as any;
-        }
-
-        // Atualizar dados da conta se fornecidos e conta existir
-        let contaAtualizada = usuarioExiste.conta;
-        if (Object.keys(dadosConta).length > 0 && usuarioExiste.conta) {
-          contaAtualizada = await prisma.conta.update({
-            where: { idConta: usuarioExiste.conta.idConta },
-            data: dadosConta,
-          });
-        }
-
-        return { usuario: usuarioAtualizado, conta: contaAtualizada };
-      });
-
-      // Remover dados sensíveis da resposta
-      const resposta = {
-        ...resultado.usuario,
-        senha: undefined,
-        tokenResetSenha: undefined,
-        conta: resultado.conta
-      };
-
-      return res.status(200).json(resposta);
-    } catch (error) {
-      console.error("❌ Erro ao atualizar usuário completo:", error);
-      return res.status(500).json({ 
-        error: error instanceof Error ? error.message : "Erro interno do servidor." 
-      });
-    }
-  }
-);
 
 // Rota para deletar um usuário
 userRouter.delete('/deletar-usuario/:id',  verifyToken,
@@ -955,8 +974,13 @@ userRouter.post("/login", async (req: Request, res: Response) => {
       expiresIn: "1h",
     });
 
-    // Omitir senha do usuário
+    // Omitir senha do usuário e converter taxaComissaoGerente
     const { senha: _, tokenResetSenha, ...userWithoutPassword } = user;
+
+    // CONVERSÃO: taxaComissaoGerente de centésimos para percentual (21.65)
+    if ((userWithoutPassword as any).taxaComissaoGerente) {
+      (userWithoutPassword as any).taxaComissaoGerente = (userWithoutPassword as any).taxaComissaoGerente / 100;
+    }
 
     res.status(200).json({ token, user: userWithoutPassword });
   } catch (error) {
@@ -1024,8 +1048,13 @@ userRouter.get('/user-info', verifyToken, async (_req: Request, res: Response) =
       return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
 
-    // Omitir senha do usuário
+    // Omitir senha do usuário e converter taxaComissaoGerente
     const { senha,tokenResetSenha, ...userWithoutPassword } = user;
+
+    // CONVERSÃO: taxaComissaoGerente de centésimos para percentual (21.65)
+    if ((userWithoutPassword as any).taxaComissaoGerente) {
+      (userWithoutPassword as any).taxaComissaoGerente = (userWithoutPassword as any).taxaComissaoGerente / 100;
+    }
 
     // Debug logs removidos - funcionando corretamente
 
@@ -1161,7 +1190,7 @@ userRouter.get('/buscar-usuario-params', verifyToken, (req: Request, res: Respon
 
 // Rota para bloquear usuário (SEM checkBlocked - Matriz pode estar bloqueado)
 userRouter.post('/bloquear-usuario/:id', 
-  apiRateLimit, // Mudança: usar apiRateLimit (100 req/15min) ao invés de authRateLimit (10 req/15min)
+  apiRateLimit, // Rate limiting DESABILITADO para testes
   verifyToken, 
   async (req: Request, res: Response) => {
     try {
@@ -1240,7 +1269,7 @@ userRouter.post('/bloquear-usuario/:id',
 
 // Rota para desbloquear usuário (SEM checkBlocked - Matriz pode estar bloqueado)
 userRouter.post('/desbloquear-usuario/:id', 
-  apiRateLimit, // Mudança: usar apiRateLimit (100 req/15min) ao invés de authRateLimit (10 req/15min)
+  apiRateLimit, // Rate limiting DESABILITADO para testes
   verifyToken, 
   async (req: Request, res: Response) => {
     try {
@@ -1317,7 +1346,126 @@ userRouter.post('/desbloquear-usuario/:id',
   }
 );
 
-// Rota para limpar rate limit (APENAS PARA DESENVOLVIMENTO)
+// Rota para obter perfil do usuário logado 
+userRouter.get("/perfil", verifyToken, async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    
+    const usuario = await prisma.usuarios.findUnique({
+      where: { idUsuario: userId },
+      select: {
+        idUsuario: true,
+        nome: true,
+        email: true,
+        cpf: true,
+        telefone: true,
+        celular: true,
+        tipo: true,
+        status: true,
+        statusConta: true,
+        reputacao: true,
+        nomeFantasia: true,
+        razaoSocial: true,
+        cnpj: true,
+        descricao: true,
+        imagem: true,
+        cidade: true,
+        estado: true,
+        conta: {
+          select: {
+            idConta: true,
+            limiteCredito: true,
+            saldoPermuta: true,
+            numeroConta: true,
+            limiteDisponivel: true,
+            saldoDinheiro: true,
+            taxaRepasseMatriz: true,
+            diaFechamentoFatura: true,
+            dataVencimentoFatura: true,
+            nomeFranquia: true,
+            planoId: true,
+            gerenteConta: {
+              select: {
+                idUsuario: true,
+                nome: true,
+                email: true
+              }
+            },
+            tipoDaConta: {
+              select: {
+                idTipoConta: true,
+                tipoDaConta: true
+              }
+            }
+          }
+        },
+        transacoesComprador: {
+          select: {
+            idTransacao: true,
+            valorRt: true,
+            createdAt: true,
+            status: true
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 10 // Últimas 10 transações como comprador
+        },
+        transacoesVendedor: {
+          select: {
+            idTransacao: true,
+            valorRt: true,
+            createdAt: true,
+            status: true
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 10 // Últimas 10 transações como vendedor
+        }
+      }
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    res.status(200).json(usuario);
+  } catch (error) {
+    console.error('Erro ao buscar perfil do usuário:', error);
+    res.status(500).json({ error: 'Erro interno do servidor.' });
+  }
+});
+
+// Rota alternativa para obter dados do usuário (endpoint /me)
+userRouter.get("/me", verifyToken, async (req: Request, res: Response) => {
+  try {
+    const userId = res.locals.userId;
+    
+    const usuario = await prisma.usuarios.findUnique({
+      where: { idUsuario: userId },
+      include: {
+        conta: {
+          include: {
+            gerenteConta: true,
+            tipoDaConta: true
+          }
+        }
+      }
+    });
+
+    if (!usuario) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    res.status(200).json(usuario);
+  } catch (error) {
+    console.error('Erro ao buscar dados do usuário:', error);
+    res.status(500).json({ error: 'Erro interno do servidor.' });
+  }
+});
+
+// Rota para limpar rate limit (RATE LIMIT DESABILITADO)
 if (process.env.NODE_ENV === 'development') {
   userRouter.post('/clear-rate-limit', (req: Request, res: Response) => {
     clearRateLimit();
@@ -1325,4 +1473,4 @@ if (process.env.NODE_ENV === 'development') {
   });
 }
 
-export default userRouter;
+export default userRouter; // Updated with profile endpoints

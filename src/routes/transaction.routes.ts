@@ -8,7 +8,7 @@ import { encaminharEstorno, encaminharSolicitacaoEstornoMatriz, estornarTransaca
 import { enviarEmail } from "../utils/utils";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
-import { strictRateLimit } from "../middlewares/rateLimit.middleware"; // Rate limiting
+import { strictRateLimit } from "../middlewares/rateLimit.middleware"; // Rate limiting DESABILITADO
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 const transactionRouter = Router();
 

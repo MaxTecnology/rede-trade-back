@@ -3,7 +3,7 @@ import { Request, Response, Router } from "express";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
 import { upload } from "../middlewares/upload"; // Importar o middleware de upload
-import { apiRateLimit, strictRateLimit } from "../middlewares/rateLimit.middleware"; // Rate limiting
+import { apiRateLimit, strictRateLimit } from "../middlewares/rateLimit.middleware"; // Rate limiting DESABILITADO
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 const offerRouter = Router();
 
@@ -30,7 +30,7 @@ offerRouter.post('/upload-imagem', upload.any(), async (req: Request, res: Respo
 // Rota para cadastrar uma nova oferta - ATUALIZADA COM UPLOAD
 offerRouter.post(
   "/criar-oferta",
-  strictRateLimit, // Rate limiting para criação de ofertas
+  strictRateLimit, // Rate limiting DESABILITADO para testes
   upload.any(), // Middleware de upload flexível
   verifyToken,
   checkBlocked,

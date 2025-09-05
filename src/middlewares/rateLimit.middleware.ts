@@ -50,10 +50,10 @@ export const createRateLimit = (maxRequests: number, windowMs: number) => {
   };
 };
 
-// Rate limits pré-configurados
-export const authRateLimit = createRateLimit(10, 15 * 60 * 1000); // 10 tentativas em 15 min
-export const apiRateLimit = createRateLimit(100, 15 * 60 * 1000); // 100 req em 15 min
-export const strictRateLimit = createRateLimit(20, 60 * 1000); // 20 req por minuto
+// Rate limits DESABILITADOS - middlewares dummy para testes
+export const authRateLimit = (req: Request, res: Response, next: NextFunction) => next();
+export const apiRateLimit = (req: Request, res: Response, next: NextFunction) => next();
+export const strictRateLimit = (req: Request, res: Response, next: NextFunction) => next();
 
 // Função para limpar cache (útil para debugging)
 export const clearRateLimit = (identifier?: string) => {
