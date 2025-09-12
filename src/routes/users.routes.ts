@@ -486,7 +486,8 @@ userRouter.put("/atualizar-usuario-completo/:id",
       const camposConta = [
         // Campos da tabela Conta (conforme schema)
         'taxaRepasseMatriz', 'limiteCredito', 'limiteUtilizado', 'limiteDisponivel',
-        'saldoPermuta', 'saldoDinheiro', 'limiteVendaMensal', 'limiteVendaTotal', 
+        // saldoPermuta e saldoDinheiro são readonly - não devem ser atualizados via edição
+        'limiteVendaMensal', 'limiteVendaTotal', 
         'limiteVendaEmpresa', 'valorVendaMensalAtual', 'valorVendaTotalAtual',
         'diaFechamentoFatura', 'numeroConta', 'dataDeAfiliacao', 'nomeFranquia',
         'tipoContaId', 'usuarioId', 'planoId', 'gerenteContaId', 'permissoesEspecificas',
@@ -496,6 +497,11 @@ userRouter.put("/atualizar-usuario-completo/:id",
       
       const dadosUsuario: any = {};
       const dadosConta: any = {};
+      
+      // DEBUG: Ver quais dados estão chegando
+      console.log('Dados recebidos na edição:', Object.keys(dadosRecebidos));
+      console.log('saldoPermuta nos dados:', dadosRecebidos.saldoPermuta);
+      console.log('saldoDinheiro nos dados:', dadosRecebidos.saldoDinheiro);
       
       // Separar campos
       Object.keys(dadosRecebidos).forEach(key => {
@@ -622,10 +628,10 @@ userRouter.put("/atualizar-usuario-completo/:id",
           
           // Converter tipos conforme schema da tabela Conta
           // Float fields
-          ['limiteCredito', 'limiteUtilizado', 'limiteDisponivel', 'saldoPermuta', 'saldoDinheiro',
+          ['limiteCredito', 'limiteUtilizado', 'limiteDisponivel',
            'limiteVendaMensal', 'limiteVendaTotal', 'limiteVendaEmpresa', 
            'valorVendaMensalAtual', 'valorVendaTotalAtual'].forEach(campo => {
-            if (dadosContaProcessados[campo]) {
+            if (dadosContaProcessados[campo] !== undefined && dadosContaProcessados[campo] !== null && dadosContaProcessados[campo] !== '') {
               let valor = dadosContaProcessados[campo].toString().replace(/[^\d,.-]/g, '');
               valor = valor.replace(',', '.');
               dadosContaProcessados[campo] = parseFloat(valor) || 0;
