@@ -145,10 +145,252 @@ offerRouter.post(
 );
 
 // Rota para listar ofertas com filtros hierárquicos
+// offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Request, res: Response) => {
+//   try {
+//     // Requisição para listar ofertas
+//     const userId = res.locals.userId; // Do middleware verifyToken
+//     const { 
+//       page = 1, 
+//       limit = 10,
+//       titulo,
+//       cidade,
+//       nomeCategoria,
+//       tipo,
+//       agencia,
+//       usuarioId: filtroUsuarioId // Novo filtro para buscar ofertas de um usuário específico
+//     } = req.query;
+
+//     // Buscar o usuário logado com sua hierarquia
+//     const usuarioLogado = await prisma.usuarios.findUnique({
+//       where: { idUsuario: userId },
+//       include: {
+//         matriz: true,
+//         usuarioCriador: true,
+//         conta: { include: { tipoDaConta: true } }
+//       }
+//     });
+
+//     if (!usuarioLogado) {
+//       console.error('❌ Erro: Usuário não encontrado para userId:', userId);
+//       return res.status(404).json({ error: 'Usuário não encontrado.' });
+//     }
+
+
+//     let whereClause: any = {};
+
+//     // Se um filtro de usuarioId for passado, ele tem prioridade.
+//     // Usado para a página "Minhas Ofertas".
+//     if (filtroUsuarioId) {
+//       whereClause.usuarioId = parseInt(filtroUsuarioId.toString());
+//     } else {
+//       // Lógica de hierarquia padrão para a página principal de ofertas
+//       if (usuarioLogado.tipo === 'Matriz') {
+//         // Matriz vê tudo (nenhum filtro de usuarioId específico)
+//       } else if (usuarioLogado.tipo === 'Gerente') {
+//         const matrizId = usuarioLogado.matrizId;
+        
+//         // Buscar todos os usuários que este gerente pode ver (seus subordinados diretos e indiretos)
+//         const usuariosVisiveis = await prisma.usuarios.findMany({
+//           where: {
+//             OR: [
+//               { idUsuario: userId }, // O próprio gerente
+//               { usuarioCriadorId: userId }, // Subordinados diretos
+//               { // Subordinados indiretos (associados de franquias criadas por este gerente)
+//                 usuarioCriador: {
+//                   usuarioCriadorId: userId
+//                 }
+//               }
+//             ]
+//           },
+//           select: { idUsuario: true }
+//         });
+
+//         const idsPermitidos = [
+//           matrizId, // Matriz
+//           ...usuariosVisiveis.map(u => u.idUsuario) // Gerente e todos os seus subordinados
+//         ].filter(id => id != null);
+//         whereClause.usuarioId = { in: idsPermitidos };
+
+//       } else if (usuarioLogado.tipo === 'Franquia') {
+//         const matrizId = usuarioLogado.matrizId;
+//         const gerenteId = usuarioLogado.usuarioCriadorId;
+        
+//         // Buscar todos os usuários que esta franquia pode ver (seus associados)
+//         const usuariosVisiveis = await prisma.usuarios.findMany({
+//           where: {
+//             OR: [
+//               { idUsuario: userId }, // A própria franquia
+//               { usuarioCriadorId: userId } // Associados diretos
+//             ]
+//           },
+//           select: { idUsuario: true }
+//         });
+
+//         const idsPermitidos = [
+//           matrizId,
+//           gerenteId,
+//           ...usuariosVisiveis.map(u => u.idUsuario)
+//         ].filter(id => id != null);
+//         whereClause.usuarioId = { in: idsPermitidos };
+
+//       } else { // Associado
+//         const matrizId = usuarioLogado.matrizId;
+//         const criadorId = usuarioLogado.usuarioCriadorId;
+//         const idsPermitidos = [matrizId, criadorId, userId].filter(id => id != null);
+//         whereClause.usuarioId = { in: idsPermitidos };
+//       }
+//     }
+
+//     // Adicionar filtros de busca específicos das ofertas
+//     let filtrosOferta: any = {};
+
+//     // Filtro por título
+//     if (titulo) {
+//       filtrosOferta.titulo = {
+//         contains: titulo.toString(),
+//         mode: 'insensitive'
+//       };
+//     }
+
+//     // Filtro por cidade
+//     if (cidade) {
+//       filtrosOferta.cidade = {
+//         contains: cidade.toString(),
+//         mode: 'insensitive'
+//       };
+//     }
+
+//     // Filtro por tipo
+//     if (tipo) {
+//       filtrosOferta.tipo = {
+//         contains: tipo.toString(),
+//         mode: 'insensitive'
+//       };
+//     }
+
+//     // Filtro por categoria (nome da categoria)
+//     if (nomeCategoria) {
+//       filtrosOferta.categoria = {
+//         nomeCategoria: {
+//           contains: nomeCategoria.toString(),
+//           mode: 'insensitive'
+//         }
+//       };
+//     }
+
+//     // Filtro por agência (nomeFranquia do usuário)
+//     if (agencia) {
+//       filtrosOferta.usuario = {
+//         nomeFantasia: {
+//           contains: agencia.toString(),
+//           mode: 'insensitive'
+//         }
+//       };
+//     }
+
+//     // Adicionar filtro para ofertas ativas no backend (melhor performance)
+//     const whereClauseComStatus = {
+//       ...whereClause,
+//       ...filtrosOferta,
+//       status: true, // Apenas ofertas ativas
+//       vencimento: {
+//         gt: new Date() // Apenas ofertas não vencidas
+//       }
+//     };
+
+
+//     // Executando consulta de ofertas
+    
+//     const ofertas = await prisma.oferta.findMany({
+//       where: whereClauseComStatus,
+//       take: Number(limit),
+//       skip: (Number(page) - 1) * Number(limit),
+//       select: {
+//         idOferta: true,
+//         titulo: true,
+//         tipo: true,
+//         status: true,
+//         descricao: true,
+//         quantidade: true,
+//         valor: true,
+//         limiteCompra: true,
+//         vencimento: true,
+//         cidade: true,
+//         estado: true,
+//         retirada: true,
+//         obs: true,
+//         imagens: true,
+//         createdAt: true,
+//         categoria: {
+//           select: {
+//             idCategoria: true,
+//             nomeCategoria: true,
+//           },
+//         },
+//         usuario: {
+//           select: {
+//             idUsuario: true,
+//             nome: true,
+//             tipo: true,
+//             nomeFantasia: true, // Adicionado nomeFantasia
+//           },
+//         },
+//         subconta: {
+//           select: {
+//             idSubContas: true,
+//             nome: true,
+//           },
+//         },
+//       },
+//       orderBy: {
+//         createdAt: 'desc'
+//       }
+//     });
+
+//     const totalOfertas = await prisma.oferta.count({ where: whereClauseComStatus });
+    
+//     // DEBUG TEMPORÁRIO: Log dos dados antes de retornar
+//     console.log('🔍 DEBUG: Total ofertas encontradas:', ofertas.length);
+//     if (ofertas.length > 0) {
+//       console.log('🔍 DEBUG: Primeira oferta completa:', JSON.stringify(ofertas[0], null, 2));
+//       console.log('🔍 DEBUG: limiteCompra da primeira oferta:', ofertas[0].limiteCompra);
+//     }
+    
+//     // Consulta executada com sucesso
+
+//     // Criar objeto meta com informações de paginação
+//     const meta = {
+//       total: totalOfertas,
+//       page: Number(page),
+//       limit: Number(limit),
+//       totalPages: Math.ceil(totalOfertas / Number(limit)),
+//       hasNext: Number(page) * Number(limit) < totalOfertas,
+//       hasPrev: Number(page) > 1
+//     };
+
+//     // DEBUG FINAL: Log da resposta completa antes de enviar
+//     console.log('🚀 ENVIANDO RESPOSTA:', { 
+//       totalOfertas: ofertas.length,
+//       primeiraOferta: ofertas[0] ? {
+//         id: ofertas[0].idOferta,
+//         titulo: ofertas[0].titulo,
+//         limiteCompra: ofertas[0].limiteCompra,
+//         temLimiteCompra: 'limiteCompra' in ofertas[0]
+//       } : null
+//     });
+
+//     res.status(200).json({ ofertas, meta });
+//   } catch (error: any) { // Adicionado : any para tipagem do erro
+//     console.error('❌ Erro ao listar ofertas (catch final):', error.message || error);
+//     res.status(500).json({ error: 'Erro ao listar ofertas.' });
+//   }
+// });
+
+// offer.routes.ts
+
+// Rota para listar ofertas com a nova lógica simplificada
 offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Request, res: Response) => {
   try {
-    // Requisição para listar ofertas
-    const userId = res.locals.userId; // Do middleware verifyToken
     const { 
       page = 1, 
       limit = 10,
@@ -157,118 +399,41 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
       nomeCategoria,
       tipo,
       agencia,
-      usuarioId: filtroUsuarioId // Novo filtro para buscar ofertas de um usuário específico
+      usuarioId: filtroUsuarioId // Este filtro define se é a página "Minhas Ofertas"
     } = req.query;
-
-    // Buscar o usuário logado com sua hierarquia
-    const usuarioLogado = await prisma.usuarios.findUnique({
-      where: { idUsuario: userId },
-      include: {
-        matriz: true,
-        usuarioCriador: true,
-        conta: { include: { tipoDaConta: true } }
-      }
-    });
-
-    if (!usuarioLogado) {
-      console.error('❌ Erro: Usuário não encontrado para userId:', userId);
-      return res.status(404).json({ error: 'Usuário não encontrado.' });
-    }
-
 
     let whereClause: any = {};
 
-    // Se um filtro de usuarioId for passado, ele tem prioridade.
-    // Usado para a página "Minhas Ofertas".
+    // Se um filtro de usuarioId for passado na URL (página "Minhas Ofertas"), 
+    // ele tem prioridade e filtramos apenas por aquele usuário.
     if (filtroUsuarioId) {
       whereClause.usuarioId = parseInt(filtroUsuarioId.toString());
-    } else {
-      // Lógica de hierarquia padrão para a página principal de ofertas
-      if (usuarioLogado.tipo === 'Matriz') {
-        // Matriz vê tudo (nenhum filtro de usuarioId específico)
-      } else if (usuarioLogado.tipo === 'Gerente') {
-        const matrizId = usuarioLogado.matrizId;
-        
-        // Buscar todos os usuários que este gerente pode ver (seus subordinados diretos e indiretos)
-        const usuariosVisiveis = await prisma.usuarios.findMany({
-          where: {
-            OR: [
-              { idUsuario: userId }, // O próprio gerente
-              { usuarioCriadorId: userId }, // Subordinados diretos
-              { // Subordinados indiretos (associados de franquias criadas por este gerente)
-                usuarioCriador: {
-                  usuarioCriadorId: userId
-                }
-              }
-            ]
-          },
-          select: { idUsuario: true }
-        });
+    } 
+    // SE NÃO HOUVER FILTRO, NENHUMA CONDIÇÃO DE USUÁRIO É ADICIONADA.
+    // Isso fará com que a busca retorne ofertas de TODOS os usuários.
+    // Toda a lógica complexa de hierarquia (Matriz, Gerente, etc.) foi removida daqui.
 
-        const idsPermitidos = [
-          matrizId, // Matriz
-          ...usuariosVisiveis.map(u => u.idUsuario) // Gerente e todos os seus subordinados
-        ].filter(id => id != null);
-        whereClause.usuarioId = { in: idsPermitidos };
-
-      } else if (usuarioLogado.tipo === 'Franquia') {
-        const matrizId = usuarioLogado.matrizId;
-        const gerenteId = usuarioLogado.usuarioCriadorId;
-        
-        // Buscar todos os usuários que esta franquia pode ver (seus associados)
-        const usuariosVisiveis = await prisma.usuarios.findMany({
-          where: {
-            OR: [
-              { idUsuario: userId }, // A própria franquia
-              { usuarioCriadorId: userId } // Associados diretos
-            ]
-          },
-          select: { idUsuario: true }
-        });
-
-        const idsPermitidos = [
-          matrizId,
-          gerenteId,
-          ...usuariosVisiveis.map(u => u.idUsuario)
-        ].filter(id => id != null);
-        whereClause.usuarioId = { in: idsPermitidos };
-
-      } else { // Associado
-        const matrizId = usuarioLogado.matrizId;
-        const criadorId = usuarioLogado.usuarioCriadorId;
-        const idsPermitidos = [matrizId, criadorId, userId].filter(id => id != null);
-        whereClause.usuarioId = { in: idsPermitidos };
-      }
-    }
-
-    // Adicionar filtros de busca específicos das ofertas
+    // Adicionar outros filtros de busca (título, cidade, etc.)
     let filtrosOferta: any = {};
 
-    // Filtro por título
     if (titulo) {
       filtrosOferta.titulo = {
         contains: titulo.toString(),
         mode: 'insensitive'
       };
     }
-
-    // Filtro por cidade
     if (cidade) {
       filtrosOferta.cidade = {
         contains: cidade.toString(),
         mode: 'insensitive'
       };
     }
-
-    // Filtro por tipo
     if (tipo) {
       filtrosOferta.tipo = {
         contains: tipo.toString(),
         mode: 'insensitive'
       };
     }
-
-    // Filtro por categoria (nome da categoria)
     if (nomeCategoria) {
       filtrosOferta.categoria = {
         nomeCategoria: {
@@ -277,8 +442,6 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
         }
       };
     }
-
-    // Filtro por agência (nomeFranquia do usuário)
     if (agencia) {
       filtrosOferta.usuario = {
         nomeFantasia: {
@@ -288,8 +451,9 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
       };
     }
 
-    // Adicionar filtro para ofertas ativas no backend (melhor performance)
-    const whereClauseComStatus = {
+    // Combina a cláusula de usuário (se existir) com os outros filtros
+    // e os filtros padrão de status e vencimento.
+    const whereClauseCompleta = {
       ...whereClause,
       ...filtrosOferta,
       status: true, // Apenas ofertas ativas
@@ -298,14 +462,13 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
       }
     };
 
-
-    // Executando consulta de ofertas
-    
+    // Executando a consulta de ofertas
     const ofertas = await prisma.oferta.findMany({
-      where: whereClauseComStatus,
+      where: whereClauseCompleta,
       take: Number(limit),
       skip: (Number(page) - 1) * Number(limit),
       select: {
+        // ... (seu select continua o mesmo)
         idOferta: true,
         titulo: true,
         tipo: true,
@@ -332,7 +495,13 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
             idUsuario: true,
             nome: true,
             tipo: true,
-            nomeFantasia: true, // Adicionado nomeFantasia
+            nomeFantasia: true,
+            usuarioCriador: {
+            select: {
+              idUsuario: true,
+              nome: true,
+            }
+          }
           },
         },
         subconta: {
@@ -347,17 +516,8 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
       }
     });
 
-    const totalOfertas = await prisma.oferta.count({ where: whereClauseComStatus });
+    const totalOfertas = await prisma.oferta.count({ where: whereClauseCompleta });
     
-    // DEBUG TEMPORÁRIO: Log dos dados antes de retornar
-    console.log('🔍 DEBUG: Total ofertas encontradas:', ofertas.length);
-    if (ofertas.length > 0) {
-      console.log('🔍 DEBUG: Primeira oferta completa:', JSON.stringify(ofertas[0], null, 2));
-      console.log('🔍 DEBUG: limiteCompra da primeira oferta:', ofertas[0].limiteCompra);
-    }
-    
-    // Consulta executada com sucesso
-
     // Criar objeto meta com informações de paginação
     const meta = {
       total: totalOfertas,
@@ -368,20 +528,9 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
       hasPrev: Number(page) > 1
     };
 
-    // DEBUG FINAL: Log da resposta completa antes de enviar
-    console.log('🚀 ENVIANDO RESPOSTA:', { 
-      totalOfertas: ofertas.length,
-      primeiraOferta: ofertas[0] ? {
-        id: ofertas[0].idOferta,
-        titulo: ofertas[0].titulo,
-        limiteCompra: ofertas[0].limiteCompra,
-        temLimiteCompra: 'limiteCompra' in ofertas[0]
-      } : null
-    });
-
     res.status(200).json({ ofertas, meta });
-  } catch (error: any) { // Adicionado : any para tipagem do erro
-    console.error('❌ Erro ao listar ofertas (catch final):', error.message || error);
+  } catch (error: any) {
+    console.error('❌ Erro ao listar ofertas:', error.message || error);
     res.status(500).json({ error: 'Erro ao listar ofertas.' });
   }
 });
