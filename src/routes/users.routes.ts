@@ -1001,11 +1001,11 @@ userRouter.get('/user-info', verifyToken, async (_req: Request, res: Response) =
     const userId = res.locals.userId;
 
     // Busca as informações do usuário no banco de dados
-    const user = await prisma.usuarios.findUnique({
-      where: { idUsuario: userId },
-      include: {
-        conta: {
-          select:{
+  const user = await prisma.usuarios.findUnique({
+    where: { idUsuario: userId },
+    include: {
+      conta: {
+        select:{
             tipoDaConta:true,
             idConta:true,
             cobrancas:true, 
@@ -1042,6 +1042,13 @@ userRouter.get('/user-info', verifyToken, async (_req: Request, res: Response) =
             valorVendaTotalAtual:true, // TOD ******************************* //
           }
         },
+        clienteAuth: true,
+        filialAuth: {
+          include: {
+            matriz: true,
+          }
+        },
+        matrizPerfil: true,
         categoria: true, // ADICIONADO: Para consistência com buscar-usuario
         subcategoria: true, // ADICIONADO: Para consistência com buscar-usuario
         transacoesComprador: true,
@@ -1057,6 +1064,29 @@ userRouter.get('/user-info', verifyToken, async (_req: Request, res: Response) =
     // Omitir senha do usuário e converter taxaComissaoGerente
     const { senha,tokenResetSenha, ...userWithoutPassword } = user;
 
+    const contaFallback = userWithoutPassword.conta
+      ? userWithoutPassword.conta
+      : {
+          idConta: null,
+          numeroConta: null,
+          nomeFranquia:
+            userWithoutPassword.filialAuth?.nomeFantasia ||
+            userWithoutPassword.matrizPerfil?.nome ||
+            userWithoutPassword.nomeFantasia ||
+            userWithoutPassword.nome,
+          limiteCredito: 0,
+          limiteUtilizado: 0,
+          saldoPermuta: 0,
+          saldoDinheiro: 0,
+          limiteVendaMensal: 0,
+          limiteVendaTotal: 0,
+          limiteVendaEmpresa: 0,
+          valorVendaMensalAtual: 0,
+          valorVendaTotalAtual: 0,
+          tipoDaConta: null,
+          plano: null,
+        };
+
     // CONVERSÃO: taxaComissaoGerente de centésimos para percentual (21.65)
     if ((userWithoutPassword as any).taxaComissaoGerente) {
       (userWithoutPassword as any).taxaComissaoGerente = (userWithoutPassword as any).taxaComissaoGerente / 100;
@@ -1064,7 +1094,10 @@ userRouter.get('/user-info', verifyToken, async (_req: Request, res: Response) =
 
     // Debug logs removidos - funcionando corretamente
 
-    res.status(200).json(userWithoutPassword);
+    res.status(200).json({
+      ...userWithoutPassword,
+      conta: contaFallback,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Erro ao obter informações do usuário.' });

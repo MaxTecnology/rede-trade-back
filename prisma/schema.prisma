@@ -7,27 +7,55 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UsuarioAuthTipo {
+  CLIENTE
+  SUBCONTA
+  OPERACIONAL
+}
+
+enum FilialTipo {
+  MASTER
+  COMUM
+}
+
+enum TipoDocumento {
+  CPF
+  CNPJ
+}
+
+enum ClienteStatus {
+  ATIVO
+  INATIVO
+  SUSPENSO
+}
+
+enum ContaStatus {
+  ATIVA
+  SUSPENSA
+  ENCERRADA
+}
+
 model Usuarios {
-  idUsuario                        Int                  @id @default(autoincrement())
+  idUsuario                        Int                   @id @default(autoincrement())
   usuarioCriadorId                 Int?
   matrizId                         Int?
   nome                             String
-  cpf                              String               @unique
-  email                            String               @unique
+  cpf                              String                @unique
+  email                            String                @unique
   senha                            String
   imagem                           String?
-  statusConta                      Boolean?             @default(true)
-  reputacao                        Float?               @default(0.0)
+  statusConta                      Boolean?              @default(true)
+  reputacao                        Float?                @default(0.0)
   razaoSocial                      String?
   nomeFantasia                     String?
   cnpj                             String?
   inscEstadual                     String?
   inscMunicipal                    String?
-  mostrarNoSite                    Boolean              @default(true)
+  mostrarNoSite                    Boolean               @default(true)
   descricao                        String?
   tipo                             String?
   tipoDeMoeda                      String?
-  status                           Boolean              @default(false)
+  status                           Boolean               @default(false)
   restricao                        String?
   nomeContato                      String?
   telefone                         String?
@@ -49,31 +77,110 @@ model Usuarios {
   categoriaId                      Int?
   subcategoriaId                   Int?
   taxaComissaoGerente              Int?
-  permissoesDoUsuario              String               @default("[]")
+  permissoesDoUsuario              String                @default("[]")
   tokenResetSenha                  String?
-  bloqueado                        Boolean              @default(false)
-  cobrancasGerenciadas             Cobranca[]           @relation("CobrancaToGerente")
-  cobrancas                        Cobranca[]           @relation("CobrancaToUsuario")
-  contasGerenciadas                Conta[]              @relation("GerenteToConta")
-  conta                            Conta?               @relation("UsuariosToConta")
-  fundoPermuta                     FundoPermuta[]       @relation("UsuarioToFundoPermuta")
-  ofertas                          Oferta[]             @relation("OfertaToUsuario")
-  solicitacoesDeCreditoMatriz      SolicitacaoCredito[] @relation("MatrizToSolicitacao")
-  solicitacoesDeCreditoCriadas     SolicitacaoCredito[] @relation("UsuariosToUsuarioCriador")
-  solicitacoesDeCreditoSolicitadas SolicitacaoCredito[] @relation("SolicitacaoToUsuario")
-  transacoesComprador              Transacao[]          @relation("CompradorToUsuario")
-  transacoesVendedor               Transacao[]          @relation("VendedorToUsuario")
-  categoria                        Categoria?           @relation("UsuarioToCategoria", fields: [categoriaId], references: [idCategoria])
-  matriz                           Usuarios?            @relation("MatrizToUsuarios", fields: [matrizId], references: [idUsuario])
-  usuariosFilhosDaMatriz           Usuarios[]           @relation("MatrizToUsuarios")
-  subcategoria                     Subcategoria?        @relation("UsuarioToSubcategoria", fields: [subcategoriaId], references: [idSubcategoria])
-  usuarioCriador                   Usuarios?            @relation("UsuariosToUsuarioCriador", fields: [usuarioCriadorId], references: [idUsuario])
-  usuariosCriados                  Usuarios[]           @relation("UsuariosToUsuarioCriador")
+  bloqueado                        Boolean               @default(false)
+  tipoAuth                         UsuarioAuthTipo       @default(OPERACIONAL)
+  clienteId                        Int?
+  filialId                         Int?
+  createdAt                        DateTime              @default(now())
+  updatedAt                        DateTime              @updatedAt
+  cobrancasGerenciadas             Cobranca[]            @relation("CobrancaToGerente")
+  cobrancas                        Cobranca[]            @relation("CobrancaToUsuario")
+  contasGerenciadas                Conta[]               @relation("GerenteToConta")
+  conta                            Conta?                @relation("UsuariosToConta")
+  fundoPermuta                     FundoPermuta[]        @relation("UsuarioToFundoPermuta")
+  ofertas                          Oferta[]              @relation("OfertaToUsuario")
+  solicitacoesDeCreditoMatriz      SolicitacaoCredito[]  @relation("MatrizToSolicitacao")
+  solicitacoesDeCreditoCriadas     SolicitacaoCredito[]  @relation("UsuariosToUsuarioCriador")
+  solicitacoesDeCreditoSolicitadas SolicitacaoCredito[]  @relation("SolicitacaoToUsuario")
+  transacoesComprador              Transacao[]           @relation("CompradorToUsuario")
+  transacoesVendedor               Transacao[]           @relation("VendedorToUsuario")
+  categoria                        Categoria?            @relation("UsuarioToCategoria", fields: [categoriaId], references: [idCategoria])
+  matriz                           Usuarios?             @relation("MatrizToUsuarios", fields: [matrizId], references: [idUsuario])
+  usuariosFilhosDaMatriz           Usuarios[]            @relation("MatrizToUsuarios")
+  subcategoria                     Subcategoria?         @relation("UsuarioToSubcategoria", fields: [subcategoriaId], references: [idSubcategoria])
+  usuarioCriador                   Usuarios?             @relation("UsuariosToUsuarioCriador", fields: [usuarioCriadorId], references: [idUsuario])
+  usuariosCriados                  Usuarios[]            @relation("UsuariosToUsuarioCriador")
   auditorias                       AuditoriaFinanceira[] @relation("AuditoriaToUsuario")
+  clienteAuth                      Cliente?              @relation("UsuarioClienteAuth", fields: [clienteId], references: [id])
+  filialAuth                       Filial?               @relation("UsuarioFilialAuth", fields: [filialId], references: [id])
+  matrizPerfil                     Matriz?               @relation("UsuarioToMatrizPerfil")
+  filialPerfil                     Filial?               @relation("UsuarioToFilialPerfil")
+
+  @@index([clienteId])
+  @@index([filialId])
+}
+
+model Matriz {
+  id        Int       @id @default(autoincrement())
+  nome      String
+  cnpj      String    @unique
+  descricao String?
+  contatos  Json?
+  endereco  Json?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  filiais   Filial[]  @relation("MatrizToFilial")
+  clientes  Cliente[]
+  contas    Conta[]   @relation("MatrizToConta")
+  usuarioId Int?      @unique
+  usuario   Usuarios? @relation("UsuarioToMatrizPerfil", fields: [usuarioId], references: [idUsuario])
+}
+
+model Filial {
+  id            Int        @id @default(autoincrement())
+  matrizId      Int
+  filialPaiId   Int?
+  tipo          FilialTipo @default(COMUM)
+  nomeFantasia  String
+  cnpj          String     @unique
+  contatos      Json?
+  endereco      Json?
+  configuracoes Json?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  matriz        Matriz     @relation("MatrizToFilial", fields: [matrizId], references: [id])
+  filialPai     Filial?    @relation("FilialHierarquia", fields: [filialPaiId], references: [id])
+  filiaisFilhas Filial[]   @relation("FilialHierarquia")
+  clientes      Cliente[]
+  contas        Conta[]
+  usuariosAuth  Usuarios[] @relation("UsuarioFilialAuth")
+  usuarioId     Int?       @unique
+  usuario       Usuarios?  @relation("UsuarioToFilialPerfil", fields: [usuarioId], references: [idUsuario])
+
+  @@index([matrizId])
+  @@index([filialPaiId])
+}
+
+model Cliente {
+  id            Int           @id @default(autoincrement())
+  matrizId      Int
+  filialId      Int
+  razaoSocial   String
+  nomeFantasia  String
+  documento     String        @unique
+  tipoDocumento TipoDocumento
+  situacao      ClienteStatus @default(ATIVO)
+  contatos      Json?
+  endereco      Json?
+  limitesPadrao Json?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  matriz        Matriz        @relation(fields: [matrizId], references: [id])
+  filial        Filial        @relation(fields: [filialId], references: [id])
+  contas        Conta[]
+  usuariosAuth  Usuarios[]    @relation("UsuarioClienteAuth")
+
+  @@index([matrizId])
+  @@index([filialId])
 }
 
 model Conta {
   idConta               Int         @id @default(autoincrement())
+  clienteId             Int?
+  filialId              Int?
+  matrizId              Int?
   taxaRepasseMatriz     Int?
   limiteCredito         Float       @default(0.0)
   limiteUtilizado       Float       @default(0.0)
@@ -92,15 +199,28 @@ model Conta {
   usuarioId             Int?        @unique
   planoId               Int?
   gerenteContaId        Int?
+  status                ContaStatus @default(ATIVA)
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
   permissoesEspecificas String?     @default("[]")
   limiteDisponivel      Float?
   saldoDinheiro         Float       @default(0.0)
+  formaPagamentoPlano   String?     @default("0")
+  valorPlanoPermuta     Float       @default(0.0)
+  valorPlanoDinheiro    Float       @default(0.0)
   cobrancas             Cobranca[]  @relation("CobrancaToConta")
   gerenteConta          Usuarios?   @relation("GerenteToConta", fields: [gerenteContaId], references: [idUsuario])
   plano                 Plano?      @relation("ContaToPlano", fields: [planoId], references: [idPlano])
   tipoDaConta           TipoConta?  @relation("TipoContaToConta", fields: [tipoContaId], references: [idTipoConta])
   usuario               Usuarios?   @relation("UsuariosToConta", fields: [usuarioId], references: [idUsuario], map: "contaUsuarioId")
+  cliente               Cliente?    @relation(fields: [clienteId], references: [id])
+  filial                Filial?     @relation(fields: [filialId], references: [id])
+  matriz                Matriz?     @relation("MatrizToConta", fields: [matrizId], references: [id])
   subContas             SubContas[] @relation("SubContasToConta")
+
+  @@index([clienteId])
+  @@index([filialId])
+  @@index([matrizId])
 }
 
 model TipoConta {
@@ -217,9 +337,9 @@ model Subcategoria {
 }
 
 model Transacao {
-  idTransacao                    Int            @id @default(autoincrement())
-  codigo                         String         @default(uuid()) @db.Uuid
-  createdAt                      DateTime       @default(now())
+  idTransacao                    Int                   @id @default(autoincrement())
+  codigo                         String                @default(uuid()) @db.Uuid
+  createdAt                      DateTime              @default(now())
   dataDoEstorno                  DateTime?
   nomeComprador                  String
   nomeVendedor                   String
@@ -239,7 +359,7 @@ model Transacao {
   notaAtendimento                Int
   observacaoNota                 String
   status                         String
-  emiteVoucher                   Boolean        @default(false)
+  emiteVoucher                   Boolean               @default(false)
   ofertaId                       Int?
   subContaCompradorId            Int?
   subContaVendedorId             Int?
@@ -247,11 +367,11 @@ model Transacao {
   comissaoParcelada              Float
   cobrancas                      Cobranca[]
   parcelamento                   Parcelamento[]
-  comprador                      Usuarios?      @relation("CompradorToUsuario", fields: [compradorId], references: [idUsuario])
-  oferta                         Oferta?        @relation(fields: [ofertaId], references: [idOferta])
-  vendedor                       Usuarios?      @relation("VendedorToUsuario", fields: [vendedorId], references: [idUsuario])
-  subContaComprador              SubContas?     @relation("CompradorToSubConta", fields: [subContaCompradorId], references: [idSubContas], map: "transacaoSubContaCompradorId")
-  subContaVendedor               SubContas?     @relation("VendedorToSubConta", fields: [subContaVendedorId], references: [idSubContas], map: "transacaoSubContaVendedorId")
+  comprador                      Usuarios?             @relation("CompradorToUsuario", fields: [compradorId], references: [idUsuario])
+  oferta                         Oferta?               @relation(fields: [ofertaId], references: [idOferta])
+  vendedor                       Usuarios?             @relation("VendedorToUsuario", fields: [vendedorId], references: [idUsuario])
+  subContaComprador              SubContas?            @relation("CompradorToSubConta", fields: [subContaCompradorId], references: [idSubContas], map: "transacaoSubContaCompradorId")
+  subContaVendedor               SubContas?            @relation("VendedorToSubConta", fields: [subContaVendedorId], references: [idSubContas], map: "transacaoSubContaVendedorId")
   voucher                        Voucher[]
   auditorias                     AuditoriaFinanceira[] @relation("AuditoriaToTransacao")
 }
@@ -327,28 +447,28 @@ model FundoPermuta {
 
 // FASE 2.1 - Sistema de Auditoria Financeira
 model AuditoriaFinanceira {
-  id                 String   @id @default(uuid())
-  timestamp          DateTime @default(now())
-  usuarioId          Int?
-  usuarioExecutor    String?  // Nome ou identificação de quem executou
-  acao               String   // "TRANSACAO", "ESTORNO", "AJUSTE_SALDO", "CRIAR_COBRANCA"
-  entidade           String   // "TRANSACAO", "CONTA", "COBRANCA", "VOUCHER"
-  entidadeId         Int?     // ID da entidade afetada
-  dadosAnteriores    Json?    // Estado anterior dos dados
-  dadosNovos         Json?    // Estado novo dos dados
-  valorOperacao      Float?   // Valor da operação financeira
-  contasAfetadas     Json?    // Array com IDs das contas afetadas
-  transacaoId        Int?     // ID da transação relacionada (se aplicável)
-  ipAddress          String?
-  userAgent          String?
-  detalhesOperacao   String?  // Descrição detalhada da operação
-  resultado          String   // "SUCESSO", "ERRO", "PENDENTE"
-  tempoExecucao      Int?     // Tempo de execução em ms
-  sessionId          String?  // ID da sessão do usuário
-  
+  id               String   @id @default(uuid())
+  timestamp        DateTime @default(now())
+  usuarioId        Int?
+  usuarioExecutor  String? // Nome ou identificação de quem executou
+  acao             String // "TRANSACAO", "ESTORNO", "AJUSTE_SALDO", "CRIAR_COBRANCA"
+  entidade         String // "TRANSACAO", "CONTA", "COBRANCA", "VOUCHER"
+  entidadeId       Int? // ID da entidade afetada
+  dadosAnteriores  Json? // Estado anterior dos dados
+  dadosNovos       Json? // Estado novo dos dados
+  valorOperacao    Float? // Valor da operação financeira
+  contasAfetadas   Json? // Array com IDs das contas afetadas
+  transacaoId      Int? // ID da transação relacionada (se aplicável)
+  ipAddress        String?
+  userAgent        String?
+  detalhesOperacao String? // Descrição detalhada da operação
+  resultado        String // "SUCESSO", "ERRO", "PENDENTE"
+  tempoExecucao    Int? // Tempo de execução em ms
+  sessionId        String? // ID da sessão do usuário
+
   // Relacionamentos
-  usuario            Usuarios? @relation("AuditoriaToUsuario", fields: [usuarioId], references: [idUsuario])
-  transacao          Transacao? @relation("AuditoriaToTransacao", fields: [transacaoId], references: [idTransacao])
+  usuario   Usuarios?  @relation("AuditoriaToUsuario", fields: [usuarioId], references: [idUsuario])
+  transacao Transacao? @relation("AuditoriaToTransacao", fields: [transacaoId], references: [idTransacao])
 
   @@index([timestamp])
   @@index([usuarioId])

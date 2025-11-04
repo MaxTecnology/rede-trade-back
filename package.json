@@ -7,7 +7,7 @@
     "_seed_disabled": "tsx seeds/index.ts"
   },
   "scripts": {
-    "seed": "tsx seeds/index.ts",
+    "seed": "ts-node seeds/index.ts",
     "seed:clear": "tsx seeds/index.ts --clear",
     "seed:dev": "tsx watch seeds/index.ts",
     "seed:teste": "tsx prisma/seeds/teste-limpo.ts",

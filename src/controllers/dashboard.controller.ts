@@ -185,7 +185,7 @@ export const fundoPermutaUnidade = async (req: Request, res: Response) => {
     });
 
     if (!franquia || !franquia.conta || !franquia.conta.tipoDaConta) {
-      return res.status(404).json({ error: "Franquia não encontrada." });
+      return res.status(200).json({ valorFundoPermutaUnidade: 0, fundoPermutaFranquia: [], franquia: null });
     }
 
 

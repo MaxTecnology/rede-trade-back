@@ -358,6 +358,10 @@ accountRouter.put(
         planoId,
         taxaRepasseMatriz,
         permissoesEspecificas,
+        formaPagamentoPlano,
+        saldoDinheiro,
+        valorPlanoPermuta,
+        valorPlanoDinheiro,
       } = req.body;
 
       // Verificar se a conta existe
@@ -369,7 +373,19 @@ accountRouter.put(
         return res.status(404).json({ error: "Conta não encontrada." });
       }
 
-      const saldoPermuta = saldoPermutaRequest !== null ? saldoPermutaRequest : 0;
+      const parseNumber = (value: any) => {
+        if (value === null || value === undefined || value === "") return undefined;
+        if (typeof value === "number") return value;
+        const parsed = parseFloat(
+          value.toString().replace(/[^\d,.-]/g, "").replace(",", ".")
+        );
+        return Number.isNaN(parsed) ? undefined : parsed;
+      };
+
+      const saldoPermuta = saldoPermutaRequest !== null ? parseNumber(saldoPermutaRequest) ?? 0 : 0;
+      const saldoDinheiroNumero = saldoDinheiro !== undefined ? parseNumber(saldoDinheiro) ?? 0 : undefined;
+      const valorPlanoPermutaNumero = valorPlanoPermuta !== undefined ? parseNumber(valorPlanoPermuta) ?? 0 : undefined;
+      const valorPlanoDinheiroNumero = valorPlanoDinheiro !== undefined ? parseNumber(valorPlanoDinheiro) ?? 0 : undefined;
 
       // Atualizar os dados da conta
       const contaAtualizada = await prisma.conta.update({
@@ -377,22 +393,26 @@ accountRouter.put(
         data: {
           nomeFranquia,
           dataDeAfiliacao,
-          valorVendaTotalAtual,
+          valorVendaTotalAtual: valorVendaTotalAtual !== undefined ? parseNumber(valorVendaTotalAtual) ?? 0 : undefined,
           tipoContaId,
           gerenteContaId,
-          limiteCredito,
-          limiteUtilizado,
-          limiteDisponivel,
+          limiteCredito: limiteCredito !== undefined ? parseNumber(limiteCredito) ?? 0 : undefined,
+          limiteUtilizado: limiteUtilizado !== undefined ? parseNumber(limiteUtilizado) ?? 0 : undefined,
+          limiteDisponivel: limiteDisponivel !== undefined ? parseNumber(limiteDisponivel) ?? 0 : undefined,
           saldoPermuta,
-          dataVencimentoFatura,
-          diaFechamentoFatura,
-          limiteVendaEmpresa,
-          limiteVendaMensal,
-          limiteVendaTotal,
-          valorVendaMensalAtual,
+          saldoDinheiro: saldoDinheiroNumero,
+          dataVencimentoFatura: dataVencimentoFatura ? parseInt(dataVencimentoFatura, 10) : undefined,
+          diaFechamentoFatura: diaFechamentoFatura ? parseInt(diaFechamentoFatura, 10) : undefined,
+          limiteVendaEmpresa: limiteVendaEmpresa !== undefined ? parseNumber(limiteVendaEmpresa) ?? 0 : undefined,
+          limiteVendaMensal: limiteVendaMensal !== undefined ? parseNumber(limiteVendaMensal) ?? 0 : undefined,
+          limiteVendaTotal: limiteVendaTotal !== undefined ? parseNumber(limiteVendaTotal) ?? 0 : undefined,
+          valorVendaMensalAtual: valorVendaMensalAtual !== undefined ? parseNumber(valorVendaMensalAtual) ?? 0 : undefined,
           planoId,
-          taxaRepasseMatriz,
+          taxaRepasseMatriz: taxaRepasseMatriz !== undefined ? parseNumber(taxaRepasseMatriz) ?? 0 : undefined,
           permissoesEspecificas,
+          formaPagamentoPlano,
+          valorPlanoPermuta: valorPlanoPermutaNumero,
+          valorPlanoDinheiro: valorPlanoDinheiroNumero,
         },
       });
       return res.status(200).json(contaAtualizada);

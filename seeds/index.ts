@@ -2,10 +2,6 @@ import { PrismaClient } from "@prisma/client";
 import { logger } from "./utils/logger";
 import { clearDatabase } from "./utils/database";
 import { seedUsuarios } from "./seeders/usuarios.seeder";
-import { seedCategorias } from "./seeders/categorias.seeder";
-import { seedContas } from "./seeders/contas.seeder";
-import { seedOfertas } from "./seeders/ofertas.seeder";
-import { seedTransacoes } from "./seeders/transacoes.seeder";
 
 const prisma = new PrismaClient();
 
@@ -20,39 +16,16 @@ async function main() {
     }
 
     // Executar seeds em ordem
-    logger.info('👤 Criando usuários...');
-    const usuarios = await seedUsuarios(prisma);
-
-    logger.info('🏷️ Criando categorias e subcategorias...');
-    const categorias = await seedCategorias(prisma);
-
-    logger.info('🏦 Criando contas...');
-    const contas = await seedContas(prisma, usuarios);
-
-    logger.info('🛍️ Criando ofertas...');
-    const ofertas = await seedOfertas(prisma, usuarios, categorias);
-
-    logger.info('💰 Criando transações...');
-    const transacoes = await seedTransacoes(prisma, usuarios, ofertas);
+    logger.info('👤 Criando usuário Matriz...');
+    const matriz = await seedUsuarios(prisma);
 
     logger.success('✅ Seeds executados com sucesso!');
     logger.info('');
     logger.info('=== DADOS DE ACESSO ===');
-    logger.info('👑 Matriz: usuario.matriz@example.com | Senha: 123456');
-    logger.info('👨‍💼 Gerente: gerente.conta@example.com | Senha: 123456');
-    logger.info('👤 Usuário: usuario.comum@example.com | Senha: 123456');
-    logger.info('🏢 Franquia A: franquia.a@example.com | Senha: senha101');
-    logger.info('🏢 Franquia B: franquia.b@example.com | Senha: senha102');
-    logger.info('👥 Pedro: pedro.associado@example.com | Senha: 123456');
-    logger.info('👥 Lucia: lucia.associada@example.com | Senha: 123456');
-    logger.info('👥 Ricardo: ricardo.associado@example.com | Senha: 123456');
-    
+    logger.info(`👑 Matriz: ${matriz.email} | Senha: 123456`);
+
     return {
-      usuarios,
-      categorias,
-      contas,
-      ofertas,
-      transacoes
+      matriz
     };
 
   } catch (error) {

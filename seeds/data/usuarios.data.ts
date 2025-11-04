@@ -378,18 +378,9 @@ export const usuariosData = {
 
 export async function hashPasswords() {
   const hash = async (password: string) => await bcrypt.hash(password, 10);
-  
+
   return {
     matriz: await hash(usuariosData.matriz.senha),
-    gerente: await hash(usuariosData.gerente.senha),
-    usuarioComum: await hash(usuariosData.usuarioComum.senha),
-    franquiaA: await hash(usuariosData.franquias[0].senha),
-    franquiaB: await hash(usuariosData.franquias[1].senha),
-    associados: {
-      pedro: await hash(usuariosData.associados[0].senha),
-      lucia: await hash(usuariosData.associados[1].senha),
-      ricardo: await hash(usuariosData.associados[2].senha)
-    }
   };
 }
 

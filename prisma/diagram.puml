@@ -1,0 +1,39 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+Person(admin, "Matriz/Administrador")
+Person(agency, "Agência/Filial")
+Person(customer, "Associado/Cliente")
+
+System_Boundary(RedeTrade, "Sistema Rede Trade") {
+  ContainerDb(Users, "usuarios", "Tabela", "Matriz, Agência e Cliente (campos específicos por tipo)") 
+  ContainerDb(Accounts, "contas", "Tabela", "Saldo, limites, plano e vínculo com usuário") 
+  ContainerDb(Plans, "planos", "Tabela", "Planos (Associado, Agência, etc.) com comissão e valores")
+  ContainerDb(Transactions, "transacoes", "Tabela", "Histórico de permutas com composição saldo/crédito")
+  ContainerDb(Vouchers, "vouchers", "Tabela", "Vouchers gerados por transações")
+  ContainerDb(CreditRequests, "solicitacao_credito", "Tabela", "Solicitações / workflows de crédito")
+  ContainerDb(Offers, "ofertas", "Tabela", "Marketplace de produtos e serviços")
+  ContainerDb(Audit, "auditoria_financeira", "Tabela", "Logs de auditoria financeira")
+}
+
+Rel_L(admin, Users, "Gerencia matrizes")
+Rel(admin, Plans, "Define planos")
+Rel(admin, Audit, "Monitora audit trail")
+Rel(agency, Users, "Cadastra filiais/associados")
+Rel(agency, Offers, "Cadastra ofertas")
+Rel(agency, Transactions, "Acompanha permutas")
+Rel(customer, Offers, "Cria/consome ofertas")
+Rel(customer, Transactions, "Realiza permutas")
+Rel(admin, Offers, "Publica ofertas")
+
+Rel(Users, Accounts, "1 ↔ 1")
+Rel(Accounts, Plans, "N ↔ 1")
+Rel(Users, CreditRequests, "Clientes e matriz interagem")
+Rel(Transactions, Accounts, "Atualiza saldos")
+Rel(Transactions, Vouchers, "Gera vouchers")
+Rel(Transactions, Audit, "Loga operações")
+Rel(Offers, Users, "Pertence a usuário/subconta")
+
+@enduml
