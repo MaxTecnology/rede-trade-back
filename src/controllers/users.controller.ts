@@ -595,28 +595,53 @@ export const criarUsuario = [
       }
 
       // FUNÇÃO PARA BUSCAR TIPO DE CONTA DINAMICAMENTE
-      const buscarTipoConta = async (client: TxClient, tipoUsuario: string): Promise<number> => {
-        const normalized = tipoUsuario.toLowerCase();
-        let key = tipoUsuario;
+      const buscarTipoConta = async (
+        client: TxClient,
+        tipoUsuario?: string | null
+      ): Promise<number> => {
+        const tipoRaw = (tipoUsuario ?? "").toString().trim();
 
-        if (normalized.includes("agencia")) {
-          key = normalized.includes("master") ? "AgenciaMaster" : "Agencia";
-        } else if (normalized.includes("franquia")) {
-          key = normalized.includes("master") ? "FranquiaMaster" : "Franquia";
+        if (!tipoRaw) {
+          throw new Error(
+            "Tipo de usuário não informado para criação de conta."
+          );
         }
 
-        const mapeamentoTipos: Record<string, { tipoConta: string; prefixo: string }> = {
-          Gerente: { tipoConta: "Premium", prefixo: "GER" },
-          Associado: { tipoConta: "Associado", prefixo: "ASS" },
-          Matriz: { tipoConta: "Matriz", prefixo: "MTZ" },
-          Franquia: { tipoConta: "Franquia", prefixo: "FRQ" },
-          FranquiaMaster: { tipoConta: "Franquia", prefixo: "FRQ" },
-          Agencia: { tipoConta: "Franquia", prefixo: "FRQ" },
-          AgenciaMaster: { tipoConta: "Franquia", prefixo: "FRQ" },
+        const normalized = tipoRaw.toLowerCase();
+
+        // Normaliza chave do mapeamento para evitar dependência de caixa
+        let key = normalized;
+
+        if (normalized.includes("agencia")) {
+          key = normalized.includes("master") ? "agenciamaster" : "agencia";
+        } else if (normalized.includes("franquia")) {
+          key = normalized.includes("master") ? "franquiamaster" : "franquia";
+        }
+
+        const mapeamentoTipos: Record<
+          string,
+          { tipoConta: string; prefixo: string }
+        > = {
+          gerente: { tipoConta: "Premium", prefixo: "GER" },
+          associado: { tipoConta: "Associado", prefixo: "ASS" },
+          matriz: { tipoConta: "Matriz", prefixo: "MTZ" },
+          franquia: { tipoConta: "Franquia", prefixo: "FRQ" },
+          franquiamaster: { tipoConta: "Franquia", prefixo: "FRQ" },
+          agencia: { tipoConta: "Franquia", prefixo: "FRQ" },
+          agenciamaster: { tipoConta: "Franquia", prefixo: "FRQ" },
         };
 
-        const config = mapeamentoTipos[key] || { tipoConta: tipoUsuario, prefixo: "CNT" };
-        const tipoConta = await ensureTipoConta(client, config.tipoConta, config.prefixo);
+        const config =
+          mapeamentoTipos[key] ?? {
+            tipoConta: tipoRaw,
+            prefixo: "CNT",
+          };
+
+        const tipoConta = await ensureTipoConta(
+          client,
+          config.tipoConta,
+          config.prefixo
+        );
         return tipoConta.idTipoConta;
       };
 
@@ -1092,6 +1117,12 @@ Equipe RedeTrade`;
       });
     } catch (error: any) {
       console.error("❌ Erro ao criar usuário:", error);
+      if (
+        error instanceof Error &&
+        error.message === "Tipo de usuário não informado para criação de conta."
+      ) {
+        return res.status(400).json({ error: error.message });
+      }
       return res.status(500).json({ 
         error: "Erro interno do servidor.",
         details: process.env.NODE_ENV === 'development' ? error.message : undefined

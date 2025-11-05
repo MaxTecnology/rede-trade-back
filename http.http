@@ -1,0 +1,148 @@
+@baseUrl = https://redetrade.maximizebot.com.br
+@token = {{coloque_seu_token_jwt_aqui}}
+@unique = {{timestamp}}
+
+###
+### Criar gerente (POST /usuarios/criar-usuario)
+### Observações:
+### - Utilize CPF/E-mail únicos a cada tentativa.
+### - Não envie `planoId` nem `formaPagamento` (não há planos seedados).
+### - Boundary fixo para funcionar no REST Client do VSCode.
+###
+POST {{baseUrl}}/api/usuarios/criar-usuario
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="nome"
+
+Gerente Teste {{unique}}
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="cpf"
+
+789{{unique}}00
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="email"
+
+gerente{{unique}}@example.com
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="senha"
+
+Senha123!
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="tipo"
+
+Gerente
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="statusConta"
+
+true
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="reputacao"
+
+0
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="tipoDeMoeda"
+
+BRL
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="status"
+
+true
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="usuarioCriadorId"
+
+1
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="razaoSocial"
+
+Gerente Teste {{unique}} LTDA
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="nomeFantasia"
+
+Gerente Teste {{unique}}
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="cnpj"
+
+12{{unique}}000100
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="nomeContato"
+
+Contato do Gerente
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="telefone"
+
+(11)2222-{{unique}}
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="celular"
+
+(11)9{{unique}}
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="emailContato"
+
+contato.gerente{{unique}}@example.com
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="emailSecundario"
+
+suporte.gerente{{unique}}@example.com
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="logradouro"
+
+Rua de Teste
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="numero"
+
+123
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="cep"
+
+01001-000
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="bairro"
+
+Centro
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="cidade"
+
+São Paulo
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="estado"
+
+SP
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="regiao"
+
+Sudeste
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="aceitaOrcamento"
+
+true
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="aceitaVoucher"
+
+true
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="tipoOperacao"
+
+3
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="dataVencimentoFatura"
+
+10
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="limiteCredito"
+
+150000
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="taxaGerente"
+
+7.5
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+
+###
+### Listar gerentes (GET /usuarios/listar-gerentes)
+###
+GET {{baseUrl}}/api/usuarios/listar-gerentes?page=1&pageSize=20
+Authorization: Bearer {{token}}
+Accept: application/json

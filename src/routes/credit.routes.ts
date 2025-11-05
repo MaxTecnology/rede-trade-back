@@ -38,7 +38,7 @@ creditRouter.post(
           status: "Pendente",
           descricaoSolicitante,
           usuarioSolicitanteId: usuarioId,
-          usuarioCriadorId: usuario.usuarioCriadorId || 0, // Adiciona o id do usuário criador
+          usuarioCriadorId: usuario.usuarioCriadorId ?? usuarioId, // Garante referência válida
         },
         include: {
           usuarioCriador: {
