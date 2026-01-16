@@ -22,7 +22,8 @@
     "test:integration": "jest tests/integration",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "start": "ts-node src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "deploy": "npm run build && cp -r dist /var/www/rede-trade-api/ && pm2 restart rede-trade-api"
   },
   "keywords": [],
   "author": "",

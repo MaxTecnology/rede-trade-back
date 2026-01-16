@@ -14,6 +14,7 @@ import creditRouter from "./routes/credit.routes";
 import dashboardRouter from "./routes/dashboard.routes";
 import voucherRouters from "./routes/vouchers.routes";
 import auditoriaRouter from "./routes/auditoria.routes"; // FASE 2.1 - Sistema de Auditoria
+import permissionsRouter from "./routes/permissions.routes";
 
 dotenv.config();
 
@@ -57,6 +58,8 @@ app.use("/creditos", creditRouter);
 app.use("/dashboard", dashboardRouter);
 app.use("/vouchers", voucherRouters)
 app.use("/auditoria", auditoriaRouter); // FASE 2.1 - Sistema de Auditoria
+app.use("/permissions", permissionsRouter);
+app.use("/api/permissions", permissionsRouter);
 
 //const PORT = process.env.PORT || 3001;
 

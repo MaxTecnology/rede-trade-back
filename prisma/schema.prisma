@@ -82,7 +82,6 @@ model Usuarios {
   categoriaId                      Int?
   subcategoriaId                   Int?
   taxaComissaoGerente              Int?
-  permissoesDoUsuario              String                   @default("[]")
   tokenResetSenha                  String?
   bloqueado                        Boolean                  @default(false)
   tipoAuth                         UsuarioAuthTipo          @default(OPERACIONAL)
@@ -272,13 +271,13 @@ model SubContas {
   cidade              String?
   estado              String?
   contaPaiId          Int
-  permissoes          String      @default("[]")
   tokenResetSenha     String?
   cobrancas           Cobranca[]  @relation("CobrancaToSubConta")
   ofertas             Oferta[]    @relation("OfertaToSubConta")
   contaPai            Conta       @relation("SubContasToConta", fields: [contaPaiId], references: [idConta])
   transacoesComprador Transacao[] @relation("CompradorToSubConta")
   transacoesVendedor  Transacao[] @relation("VendedorToSubConta")
+  permissionGroups    UsuarioPermissionGroup[]
 }
 
 model Oferta {
@@ -497,6 +496,7 @@ model PermissionGroup {
   assignments    PermissionGroupAssignment[]
   usuarios       UsuarioPermissionGroup[]
 
+  @@unique([nome])
   @@index([herdaDoGrupoId])
   @@index([defaultForTipo])
 }
@@ -531,15 +531,20 @@ model PermissionGroupAssignment {
 
 model UsuarioPermissionGroup {
   id               Int             @id @default(autoincrement())
-  usuarioId        Int
+  usuarioId        Int?
+  subcontaId       Int?
   groupId          Int
   escopo           String          @default("DEFAULT")
   permissoesExtras Json?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
-  usuario          Usuarios        @relation(fields: [usuarioId], references: [idUsuario])
+  usuario          Usuarios?       @relation(fields: [usuarioId], references: [idUsuario])
+  subconta         SubContas?      @relation(fields: [subcontaId], references: [idSubContas])
   group            PermissionGroup @relation(fields: [groupId], references: [id])
 
+  @@unique([usuarioId, groupId, escopo])
+  @@unique([subcontaId, groupId, escopo])
   @@index([usuarioId])
+  @@index([subcontaId])
   @@index([groupId])
 }

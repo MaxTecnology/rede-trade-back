@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { logger } from "./utils/logger";
 import { clearDatabase } from "./utils/database";
 import { seedUsuarios } from "./seeders/usuarios.seeder";
+import { backfillPermissionGroups, seedPermissionCatalog } from "./utils/permissions";
 
 const prisma = new PrismaClient();
 
@@ -15,9 +16,15 @@ async function main() {
       await clearDatabase(prisma);
     }
 
+    logger.info('🎛️ Configurando catálogo de permissões...');
+    await seedPermissionCatalog(prisma);
+
     // Executar seeds em ordem
     logger.info('👤 Criando usuário Matriz...');
     const matriz = await seedUsuarios(prisma);
+
+    logger.info('🔗 Aplicando grupos padrão aos usuários seedados...');
+    await backfillPermissionGroups(prisma);
 
     logger.success('✅ Seeds executados com sucesso!');
     logger.info('');

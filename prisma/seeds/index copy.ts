@@ -53,8 +53,7 @@ async function main() {
       taxaComissaoGerente: 20,
       bloqueado: false,
       tokenResetSenha: null,
-      permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "MANAGE_FRANCHISES", "ADMIN"]),
-    },
+          },
   });
 
   console.log('👤 Criando gerente de conta...');
@@ -99,8 +98,7 @@ async function main() {
       taxaComissaoGerente: 15,
       bloqueado: false,
       tokenResetSenha: null,
-      permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "MANAGE_ACCOUNTS"]),
-      usuarioCriadorId: usuarioMatriz.idUsuario, // Matriz criou este gerente
+            usuarioCriadorId: usuarioMatriz.idUsuario, // Matriz criou este gerente
       matrizId: usuarioMatriz.idUsuario, // Vinculado à matriz
     },
   });
@@ -147,8 +145,7 @@ async function main() {
       taxaComissaoGerente: 10,
       bloqueado: false,
       tokenResetSenha: null,
-      permissoesDoUsuario: JSON.stringify(["READ", "WRITE"]),
-      usuarioCriadorId: gerenteDeConta.idUsuario, // Gerente criou este usuário
+            usuarioCriadorId: gerenteDeConta.idUsuario, // Gerente criou este usuário
       matrizId: usuarioMatriz.idUsuario, // Vinculado à matriz
     },
   });
@@ -174,8 +171,7 @@ async function main() {
       usuarioCriadorId: usuarioMatriz.idUsuario,
       matrizId: usuarioMatriz.idUsuario,
       mostrarNoSite: true,
-      permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "MANAGE_FRANCHISES"]),
-    },
+          },
   });
 
   const franquiaB = await prisma.usuarios.create({
@@ -197,8 +193,7 @@ async function main() {
       usuarioCriadorId: usuarioMatriz.idUsuario,
       matrizId: usuarioMatriz.idUsuario,
       mostrarNoSite: true,
-      permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "MANAGE_FRANCHISES"]),
-    },
+          },
   });
 
   console.log('🏦 Criando contas...');
@@ -573,8 +568,7 @@ async function main() {
       tipoOperacao: 1,
       categoriaId: categoriaTecnologia.idCategoria,
       bloqueado: false,
-      permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "TRADE"]),
-      usuarioCriadorId: franquiaA.idUsuario,
+            usuarioCriadorId: franquiaA.idUsuario,
       matrizId: usuarioMatriz.idUsuario,
     },
   });
@@ -615,8 +609,7 @@ async function main() {
       tipoOperacao: 2,
       categoriaId: categoriaServicos.idCategoria,
       bloqueado: false,
-      permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "TRADE"]),
-      usuarioCriadorId: franquiaB.idUsuario,
+            usuarioCriadorId: franquiaB.idUsuario,
       matrizId: usuarioMatriz.idUsuario,
     },
   });
@@ -657,8 +650,7 @@ async function main() {
       tipoOperacao: 1,
       categoriaId: categoriaAlimentos.idCategoria,
       bloqueado: false,
-      permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "TRADE"]),
-      usuarioCriadorId: gerenteDeConta.idUsuario,
+            usuarioCriadorId: gerenteDeConta.idUsuario,
       matrizId: usuarioMatriz.idUsuario,
     },
   });

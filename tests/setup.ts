@@ -41,6 +41,21 @@ export const prismaMock = {
     update: jest.fn(),
     delete: jest.fn(),
   },
+  permissionGroup: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+    upsert: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+  },
+  usuarioPermissionGroup: {
+    findMany: jest.fn(),
+    upsert: jest.fn(),
+    deleteMany: jest.fn(),
+  },
+  permission: {
+    findMany: jest.fn(),
+  },
   $transaction: jest.fn(),
   $connect: jest.fn(),
   $disconnect: jest.fn(),

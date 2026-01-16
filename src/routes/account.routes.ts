@@ -158,7 +158,6 @@ accountRouter.get("/listar-contas", async (req: Request, res: Response) => {
             nome: true,
             cpf: true,
             email: true,
-            permissoesDoUsuario: true,
           },
         },
         gerenteConta: {
@@ -218,7 +217,6 @@ accountRouter.get(
               nome: true,
               cpf: true,
               email: true,
-              permissoesDoUsuario: true,
             },
           },
           plano: true,
@@ -238,7 +236,6 @@ accountRouter.get(
               nome: true,
               cpf: true,
               email: true,
-              permissoes: true,
             },
           },
         },
@@ -282,7 +279,6 @@ accountRouter.get(
               nome: true,
               cpf: true,
               email: true,
-              permissoesDoUsuario: true,
             },
           },
           plano: true,
@@ -294,7 +290,6 @@ accountRouter.get(
               nome: true,
               cpf: true,
               email: true,
-              permissoesDoUsuario: true,
             },
           },
           subContas: {
@@ -303,7 +298,6 @@ accountRouter.get(
               nome: true,
               cpf: true,
               email: true,
-              permissoes: true,
             },
           },
         },
@@ -1126,120 +1120,36 @@ accountRouter.post(
 );
 
 /*PERMISSÕES */
+const legacyAccountPermissionsMessage =
+  "Endpoints legados de permissões foram descontinuados. Use /permissions/usuarios/... para grupos e overrides.";
 
 // Método para adicionar uma nova permissão à Subconta
 accountRouter.post(
   "/subcontas/adicionar-permissao/:idSubConta",
   verifyToken,
   checkBlocked,
-  async (req: Request, res: Response) => {
-    try {
-      const { idSubConta } = req.params;
-      const { permissoes } = req.body;
-      // Verifica se a subconta existe
-      const subcontaExists = await prisma.subContas.findUnique({
-        where: { idSubContas: parseInt(idSubConta) },
-      });
-
-      if (!subcontaExists) {
-        return res.status(404).json({ error: "Subconta não encontrada." });
-      }
-
-      // Adiciona as permissões
-      const subconta = await prisma.subContas.update({
-        where: { idSubContas: parseInt(idSubConta) },
-        data: {
-          permissoes: JSON.stringify(permissoes),
-        },
-      });
-
-      // Omitir senha da subconta
-      const { senha, ...subcontaSemSenha } = subconta;
-
-      // Retornar a subconta com os relacionamentos
-      return res.status(200).json(subcontaSemSenha);
-    } catch (error) {
-      console.error(error);
-      res
-        .status(500)
-        .json({ error: "Erro ao adicionar permissões à subconta." });
-    }
+  async (_req: Request, res: Response) => {
+    return res.status(410).json({ error: legacyAccountPermissionsMessage });
   }
 );
 
 //Rota para deletar uma permissão
 accountRouter.delete(
   "/subcontas/remover-permissoes/:idSubConta",
-  async (req: Request, res: Response) => {
-    try {
-      const { idSubConta } = req.params;
-      const { permissoes } = req.body;
-
-      // Verifica se a subconta existe
-      const subcontaExists = await prisma.subContas.findUnique({
-        where: { idSubContas: parseInt(idSubConta) },
-      });
-
-      if (!subcontaExists) {
-        return res.status(404).json({ error: "Subconta não encontrada." });
-      }
-
-      const currentPermissoes = JSON.parse(subcontaExists.permissoes);
-
-      // Garante que permissoes é um array
-      const permissoesArray = Array.isArray(permissoes)
-        ? permissoes
-        : [permissoes];
-
-      // Remove as permissões
-      const updatedPermissoes = currentPermissoes.filter(
-        (p: string) => !permissoesArray.includes(p)
-      );
-
-      const updatedSubconta = await prisma.subContas.update({
-        where: { idSubContas: parseInt(idSubConta) },
-        data: {
-          permissoes: JSON.stringify(updatedPermissoes),
-        },
-      });
-      // Omitir senha da subconta
-      const { senha, ...subcontaSemSenha } = updatedSubconta;
-
-      // Retornar a subconta com os relacionamentos
-      return res.status(200).json(subcontaSemSenha);
-    } catch (error) {
-      console.error(error);
-      res
-        .status(500)
-        .json({ error: "Erro ao remover permissões da subconta." });
-    }
+  verifyToken,
+  checkBlocked,
+  async (_req: Request, res: Response) => {
+    return res.status(410).json({ error: legacyAccountPermissionsMessage });
   }
 );
 
 //Rota que lista permissoes de uma subconta
 accountRouter.get(
   "/subcontas/permissoes/:idSubConta",
-  async (req: Request, res: Response) => {
-    try {
-      const { idSubConta } = req.params;
-
-      // Verifica se a subconta existe
-      const subconta = await prisma.subContas.findUnique({
-        where: { idSubContas: parseInt(idSubConta) },
-      });
-
-      if (!subconta) {
-        return res.status(404).json({ error: "Subconta não encontrada." });
-      }
-
-      // Obtém as permissões da subconta
-      const permissoes = JSON.parse(subconta.permissoes);
-
-      res.status(200).json({ permissoes });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Erro ao obter permissões da subconta." });
-    }
+  verifyToken,
+  checkBlocked,
+  async (_req: Request, res: Response) => {
+    return res.status(410).json({ error: legacyAccountPermissionsMessage });
   }
 );
 
@@ -1248,46 +1158,8 @@ accountRouter.put(
   "/subcontas/atualizar-permissoes/:idSubConta",
   verifyToken,
   checkBlocked,
-  async (req: Request, res: Response) => {
-    try {
-      const { idSubConta } = req.params;
-      const { permissoes } = req.body;
-
-      // Verifica se a subconta existe
-      const subconta = await prisma.subContas.findUnique({
-        where: { idSubContas: parseInt(idSubConta) },
-      });
-
-      if (!subconta) {
-        return res.status(404).json({ error: "Subconta não encontrada." });
-      }
-
-      // Atualiza as permissões da subconta
-      await prisma.subContas.update({
-        where: { idSubContas: parseInt(idSubConta) },
-        data: {
-          permissoes: JSON.stringify(permissoes),
-        },
-      });
-
-      // Recupera a subconta atualizada
-      const updatedSubconta = await prisma.subContas.findUnique({
-        where: { idSubContas: parseInt(idSubConta) },
-      });
-
-      // Omitir senha da subconta
-      const subcontaSemSenha = updatedSubconta
-        ? (({ senha, ...rest }) => rest)(updatedSubconta)
-        : null;
-
-      // Retornar a subconta com os relacionamentos
-      return res.status(200).json(subcontaSemSenha);
-    } catch (error) {
-      console.error(error);
-      res
-        .status(500)
-        .json({ error: "Erro ao atualizar permissões da subconta." });
-    }
+  async (_req: Request, res: Response) => {
+    return res.status(410).json({ error: legacyAccountPermissionsMessage });
   }
 );
 
@@ -1296,35 +1168,8 @@ accountRouter.post(
   "/tipocontas/adicionar-permissao/:idTipoConta",
   verifyToken,
   checkBlocked,
-  async (req: Request, res: Response) => {
-    try {
-      const { idTipoConta } = req.params;
-      const { permissoes } = req.body;
-
-      // Verifica se o TipoConta existe
-      const tipoContaExists = await prisma.tipoConta.findUnique({
-        where: { idTipoConta: parseInt(idTipoConta) },
-      });
-
-      if (!tipoContaExists) {
-        return res.status(404).json({ error: "TipoConta não encontrada." });
-      }
-
-      // Adiciona as permissões
-      const tipoConta = await prisma.tipoConta.update({
-        where: { idTipoConta: parseInt(idTipoConta) },
-        data: {
-          permissoes: JSON.stringify(permissoes),
-        },
-      });
-
-      res.status(200).json(tipoConta);
-    } catch (error) {
-      console.error(error);
-      res
-        .status(500)
-        .json({ error: "Erro ao adicionar permissões ao TipoConta." });
-    }
+  async (_req: Request, res: Response) => {
+    return res.status(410).json({ error: legacyAccountPermissionsMessage });
   }
 );
 
@@ -1333,74 +1178,18 @@ accountRouter.delete(
   "/tipocontas/remover-permissoes/:idTipoConta",
   verifyToken,
   checkBlocked,
-  async (req: Request, res: Response) => {
-    try {
-      const { idTipoConta } = req.params;
-      const { permissoes } = req.body;
-
-      // Verifica se o TipoConta existe
-      const tipoContaExists = await prisma.tipoConta.findUnique({
-        where: { idTipoConta: parseInt(idTipoConta) },
-      });
-
-      if (!tipoContaExists) {
-        return res.status(404).json({ error: "TipoConta não encontrada." });
-      }
-
-      // Filtra as permissões que não devem ser removidas
-      const novasPermissoes = JSON.parse(tipoContaExists.permissoes).filter(
-        (permissao: string) => !permissoes.includes(permissao)
-      );
-
-      // Atualiza o Usuário com as permissões atualizadas
-      const updatedTipoConta = await prisma.tipoConta.update({
-        where: { idTipoConta: parseInt(idTipoConta) },
-        data: {
-          permissoes: {
-            set: JSON.stringify(novasPermissoes),
-          },
-        },
-      });
-
-      return res
-        .status(200)
-        .json({
-          message: "Permissões removidas com sucesso.",
-          updatedTipoConta,
-        });
-    } catch (error) {
-      console.error(error);
-      res
-        .status(500)
-        .json({ error: "Erro ao remover permissões do TipoConta." });
-    }
+  async (_req: Request, res: Response) => {
+    return res.status(410).json({ error: legacyAccountPermissionsMessage });
   }
 );
 
 // Rota para obter as permissões de um TipoConta
 accountRouter.get(
   "/tipocontas/permissoes/:idTipoConta",
-  async (req: Request, res: Response) => {
-    try {
-      const { idTipoConta } = req.params;
-
-      // Verifica se o TipoConta existe
-      const tipoConta = await prisma.tipoConta.findUnique({
-        where: { idTipoConta: parseInt(idTipoConta) },
-      });
-
-      if (!tipoConta) {
-        return res.status(404).json({ error: "TipoConta não encontrada." });
-      }
-
-      // Obtém as permissões do TipoConta
-      const permissoes = JSON.parse(tipoConta.permissoes);
-
-      res.status(200).json({ permissoes });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Erro ao obter permissões do TipoConta." });
-    }
+  verifyToken,
+  checkBlocked,
+  async (_req: Request, res: Response) => {
+    return res.status(410).json({ error: legacyAccountPermissionsMessage });
   }
 );
 
@@ -1409,41 +1198,8 @@ accountRouter.put(
   "/tipocontas/atualizar-permissoes/:idTipoConta",
   verifyToken,
   checkBlocked,
-  async (req: Request, res: Response) => {
-    try {
-      const { idTipoConta } = req.params;
-      const { permissoes } = req.body;
-
-      // Verifica se o TipoConta existe
-      const tipoConta = await prisma.tipoConta.findUnique({
-        where: { idTipoConta: parseInt(idTipoConta) },
-      });
-
-      if (!tipoConta) {
-        return res.status(404).json({ error: "TipoConta não encontrada." });
-      }
-
-      // Atualiza as permissões do TipoConta
-      await prisma.tipoConta.update({
-        where: { idTipoConta: parseInt(idTipoConta) },
-        data: {
-          permissoes: JSON.stringify(permissoes),
-        },
-      });
-
-      // Recupera o TipoConta atualizado
-      const updatedTipoConta = await prisma.tipoConta.findUnique({
-        where: { idTipoConta: parseInt(idTipoConta) },
-      });
-
-      // Retornar o TipoConta com os relacionamentos
-      return res.status(200).json(updatedTipoConta);
-    } catch (error) {
-      console.error(error);
-      res
-        .status(500)
-        .json({ error: "Erro ao atualizar permissões do TipoConta." });
-    }
+  async (_req: Request, res: Response) => {
+    return res.status(410).json({ error: legacyAccountPermissionsMessage });
   }
 );
 

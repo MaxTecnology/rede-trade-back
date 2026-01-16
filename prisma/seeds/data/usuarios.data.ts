@@ -38,11 +38,7 @@ export const usuariosData = {
     tipoOperacao: 3,
     taxaComissaoGerente: 25,
     bloqueado: false,
-    permissoesDoUsuario: JSON.stringify([
-      "READ", "WRITE", "DELETE", "MANAGE_FRANCHISES", 
-      "MANAGE_USERS", "MANAGE_CREDITS", "ADMIN_PANEL", "FINANCIAL_REPORTS"
-    ])
-  },
+      },
 
   gerente: {
     nome: "Carlos Eduardo Gerente",
@@ -81,10 +77,7 @@ export const usuariosData = {
     tipoOperacao: 2,
     taxaComissaoGerente: 20,
     bloqueado: false,
-    permissoesDoUsuario: JSON.stringify([
-      "READ", "WRITE", "MANAGE_ACCOUNTS", "MANAGE_TRANSACTIONS", "VIEW_REPORTS"
-    ])
-  },
+      },
 
   usuarioComum: {
     nome: "Ana Paula Silva",
@@ -123,8 +116,7 @@ export const usuariosData = {
     tipoOperacao: 1,
     taxaComissaoGerente: 10,
     bloqueado: false,
-    permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "TRADE"])
-  },
+      },
 
   franquias: [
     {
@@ -164,10 +156,7 @@ export const usuariosData = {
       tipoOperacao: 1,
       taxaComissaoGerente: 15,
       bloqueado: false,
-      permissoesDoUsuario: JSON.stringify([
-        "READ", "WRITE", "MANAGE_FRANCHISES", "MANAGE_LOCAL_USERS"
-      ])
-    },
+          },
     {
       nome: "Marina Costa Franqueada",
       cpf: "55555555555",
@@ -205,10 +194,7 @@ export const usuariosData = {
       tipoOperacao: 1,
       taxaComissaoGerente: 15,
       bloqueado: false,
-      permissoesDoUsuario: JSON.stringify([
-        "READ", "WRITE", "MANAGE_FRANCHISES", "MANAGE_LOCAL_USERS"
-      ])
-    }
+          }
   ],
 
   associados: [
@@ -248,8 +234,7 @@ export const usuariosData = {
       aceitaVoucher: true,
       tipoOperacao: 1,
       bloqueado: false,
-      permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "TRADE"]),
-      franquiaVinculada: "franquiaA"
+            franquiaVinculada: "franquiaA"
     },
     {
       nome: "Lucia Fernandes Oliveira",
@@ -287,8 +272,7 @@ export const usuariosData = {
       aceitaVoucher: true,
       tipoOperacao: 2,
       bloqueado: false,
-      permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "TRADE"]),
-      franquiaVinculada: "franquiaB"
+            franquiaVinculada: "franquiaB"
     },
     {
       nome: "Ricardo Almeida Costa",
@@ -326,8 +310,7 @@ export const usuariosData = {
       aceitaVoucher: true,
       tipoOperacao: 1,
       bloqueado: false,
-      permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "TRADE"]),
-      franquiaVinculada: "gerente"
+            franquiaVinculada: "gerente"
     }
   ]
 };

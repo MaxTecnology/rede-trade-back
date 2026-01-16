@@ -77,8 +77,7 @@ async function criarMatriz() {
             tipoOperacao: 3, // Compra e venda
             taxaComissaoGerente: 25,
             bloqueado: false,
-            permissoesDoUsuario: JSON.stringify(["READ", "WRITE", "DELETE", "MANAGE_FRANCHISES", "MANAGE_USERS", "MANAGE_CREDITS", "ADMIN_PANEL", "FINANCIAL_REPORTS"])
-        }
+                    }
     });
     
     console.log(`✅ Matriz criada: ${matriz.email} (ID: ${matriz.idUsuario})`);

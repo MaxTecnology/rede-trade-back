@@ -18,6 +18,7 @@ import { authRateLimit, apiRateLimit, clearRateLimit } from "../middlewares/rate
 import { validateUsuario } from "../middlewares/validateUsuario.middleware"; // Middleware de validação
 import { validateUsuarioEdicao } from "../middlewares/validateUsuarioEdicao.middleware"; // Middleware de validação para edição
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
+import { resolveUserPermissions } from "../services/permissions.service";
 
 const userRouter = Router();
 
@@ -477,7 +478,7 @@ userRouter.put("/atualizar-usuario-completo/:id",
         'emailContato', 'emailSecundario', 'site', 'logradouro', 'numero', 'cep',
         'complemento', 'bairro', 'cidade', 'estado', 'regiao', 
         'aceitaOrcamento', 'aceitaVoucher', 'tipoOperacao',
-        'categoriaId', 'subcategoriaId', 'permissoesDoUsuario', 'bloqueado',
+        'categoriaId', 'subcategoriaId', 'bloqueado',
         'tokenResetSenha',
         // CONFIRMADO NO SCHEMA: taxaComissaoGerente está na tabela Usuarios (linha 72)
         'taxaComissaoGerente'
@@ -718,119 +719,35 @@ userRouter.delete('/deletar-usuario/:id',  verifyToken,
   }
 });
 
-// Rota para adicionar permissões a um Usuário
-userRouter.post('/adicionar-permissao/:idUsuario',  verifyToken,
-  checkBlocked, async (req: Request, res: Response) => {
-  try {
-    const { idUsuario } = req.params;
-    const { permissoes } = req.body;
+const legacyPermissionsMessage =
+  "Este endpoint foi descontinuado. Utilize o módulo /permissions (grupos e overrides) para gerenciar acessos.";
 
-    // Verifica se o Usuário existe
-    const usuarioExists = await prisma.usuarios.findUnique({
-      where: { idUsuario: parseInt(idUsuario) },
-    });
-
-    if (!usuarioExists) {
-      return res.status(404).json({ error: "Usuário não encontrado." });
-    }
-
-    // Adiciona as permissões
-    const usuario = await prisma.usuarios.update({
-      where: { idUsuario: parseInt(idUsuario) },
-      data: {
-        permissoesDoUsuario: JSON.stringify(permissoes),
-      },
-    });
-
-    res.status(200).json(usuario);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erro ao adicionar permissões ao Usuário." });
-  }
-});
-
-userRouter.delete("/remover-permissao/:idUsuario",   verifyToken,
-  checkBlocked, async (req: Request, res: Response) => {
-    try {
-      const { idUsuario } = req.params;
-      const { permissoes } = req.body;
-
-      // Verifica se o Usuário existe
-      const usuarioExists = await prisma.usuarios.findUnique({
-        where: { idUsuario: parseInt(idUsuario) },
-      });
-
-      if (!usuarioExists) {
-        return res.status(404).json({ error: "Usuário não encontrado." });
-      }
-
-      // Obtém as permissões atuais do Usuário
-      const usuario = await prisma.usuarios.findUnique({
-        where: { idUsuario: parseInt(idUsuario) },
-      });
-
-      if (!usuario) {
-        return res.status(404).json({ error: "Usuário não encontrado." });
-      }
-
-      // Filtra as permissões que não devem ser removidas
-const novasPermissoes = JSON.parse(usuario.permissoesDoUsuario || "[]").filter(
-  (permissao: string) => !permissoes.includes(permissao)
-);
-
-      // Atualiza o Usuário com as permissões atualizadas
-      const updatedUser = await prisma.usuarios.update({
-        where: { idUsuario: parseInt(idUsuario) },
-        data: {
-          permissoesDoUsuario: {
-            set: JSON.stringify(novasPermissoes),
-          },
-        },
-      });
-      // Omitir senha da subconta
-      const { senha, ...usuarioSemSenha } = updatedUser;
-     return  res
-        .status(200)
-        .json({ message: "Permissões removidas com sucesso.", usuarioSemSenha });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Erro ao remover permissões do Usuário." });
-    }
+userRouter.post(
+  "/adicionar-permissao/:idUsuario",
+  verifyToken,
+  checkBlocked,
+  async (_req: Request, res: Response) => {
+    return res.status(410).json({ error: legacyPermissionsMessage });
   }
 );
 
-// Rota para listar todas as permissões de um Usuário
-  userRouter.get('/listar-permissoes/:idUsuario', async (req: Request, res: Response) => {
-    try {
-      const { idUsuario } = req.params;
+userRouter.delete(
+  "/remover-permissao/:idUsuario",
+  verifyToken,
+  checkBlocked,
+  async (_req: Request, res: Response) => {
+    return res.status(410).json({ error: legacyPermissionsMessage });
+  }
+);
 
-      // Verifica se o Usuário existe
-      const usuarioExists = await prisma.usuarios.findUnique({
-        where: { idUsuario: parseInt(idUsuario) },
-      });
-
-      if (!usuarioExists) {
-        return res.status(404).json({ error: "Usuário não encontrado." });
-      }
-
-      // Obtém as permissões do Usuário
-      const usuario = await prisma.usuarios.findUnique({
-        where: { idUsuario: parseInt(idUsuario) },
-      });
-
-      if (!usuario) {
-        return res.status(404).json({ error: "Usuário não encontrado." });
-      }
-
-      // Converte a string JSON para um array
-  const permissoes = JSON.parse(usuario.permissoesDoUsuario || "[]");
-
-      res.status(200).json({ permissoes });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Erro ao obter as permissões do Usuário." });
-    }
-  });
+userRouter.get(
+  "/listar-permissoes/:idUsuario",
+  verifyToken,
+  checkBlocked,
+  async (_req: Request, res: Response) => {
+    return res.status(410).json({ error: legacyPermissionsMessage });
+  }
+);
 
 // Rota para solicitar o envio do link de redefinição de senha usuário
 userRouter.post("/solicitar-redefinicao-senha-usuario", async (req: Request, res: Response) => {
@@ -983,6 +900,21 @@ userRouter.post("/login", async (req: Request, res: Response) => {
     // Omitir senha do usuário e converter taxaComissaoGerente
     const { senha: _, tokenResetSenha, ...userWithoutPassword } = user;
 
+    // Montar permissões alinhadas ao novo módulo
+    if (usuario) {
+      const { allow } = await resolveUserPermissions(usuario.idUsuario);
+      (userWithoutPassword as any).permissoesDoUsuario = JSON.stringify(
+        Array.from(allow)
+      );
+    } else if (subconta) {
+      const { allow } = await resolveUserPermissions(subconta.idSubContas, {
+        targetType: "SUBCONTA",
+      });
+      (userWithoutPassword as any).permissoesDoUsuario = JSON.stringify(
+        Array.from(allow)
+      );
+    }
+
     // CONVERSÃO: taxaComissaoGerente de centésimos para percentual (21.65)
     if ((userWithoutPassword as any).taxaComissaoGerente) {
       (userWithoutPassword as any).taxaComissaoGerente = (userWithoutPassword as any).taxaComissaoGerente / 100;
@@ -1092,7 +1024,12 @@ userRouter.get('/user-info', verifyToken, async (_req: Request, res: Response) =
       (userWithoutPassword as any).taxaComissaoGerente = (userWithoutPassword as any).taxaComissaoGerente / 100;
     }
 
-    // Debug logs removidos - funcionando corretamente
+    const allowFromMiddleware = Array.isArray(res.locals?.permissions?.allow)
+      ? res.locals.permissions.allow
+      : [];
+    (userWithoutPassword as any).permissoesDoUsuario = JSON.stringify(
+      allowFromMiddleware
+    );
 
     res.status(200).json({
       ...userWithoutPassword,

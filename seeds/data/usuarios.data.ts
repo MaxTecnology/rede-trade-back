@@ -39,20 +39,6 @@ export const usuariosData = {
     tipoOperacao: 3,
     taxaComissaoGerente: 25,
     bloqueado: false,
-    // 🎯 PERMISSÕES MATRIZ: Acesso total ao sistema
-    permissoesDoUsuario: JSON.stringify([
-      "ADMIN",
-      "READ", 
-      "WRITE", 
-      "DELETE", 
-      "MANAGE_FRANCHISES", 
-      "MANAGE_USERS", 
-      "MANAGE_ACCOUNTS", 
-      "MANAGE_CREDITS", 
-      "ADMIN_PANEL", 
-      "FINANCIAL_REPORTS",
-      "VIEW_REPORTS"
-    ])
   },
 
   gerente: {
@@ -92,15 +78,6 @@ export const usuariosData = {
     tipoOperacao: 2,
     taxaComissaoGerente: 20,
     bloqueado: false,
-    // 🎯 PERMISSÕES GERENTE: Gestão de contas e transações
-    permissoesDoUsuario: JSON.stringify([
-      "READ", 
-      "WRITE", 
-      "MANAGE_ACCOUNTS", 
-      "MANAGE_TRANSACTIONS", 
-      "MANAGE_FRANCHISES",
-      "VIEW_REPORTS"
-    ])
   },
 
   usuarioComum: {
@@ -140,12 +117,6 @@ export const usuariosData = {
     tipoOperacao: 1,
     taxaComissaoGerente: 10,
     bloqueado: false,
-    // 🎯 PERMISSÕES USUÁRIO COMUM: Operações básicas
-    permissoesDoUsuario: JSON.stringify([
-      "READ", 
-      "WRITE", 
-      "TRADE"
-    ])
   },
 
   franquias: [
@@ -186,14 +157,6 @@ export const usuariosData = {
       tipoOperacao: 1,
       taxaComissaoGerente: 15,
       bloqueado: false,
-      // 🎯 PERMISSÕES FRANQUIA: Gestão regional de usuários
-      permissoesDoUsuario: JSON.stringify([
-        "READ", 
-        "WRITE", 
-        "TRADE",
-        "MANAGE_FRANCHISES", 
-        "MANAGE_LOCAL_USERS"
-      ])
     },
     {
       nome: "Marina Costa Franqueada",
@@ -232,14 +195,6 @@ export const usuariosData = {
       tipoOperacao: 1,
       taxaComissaoGerente: 15,
       bloqueado: false,
-      // 🎯 PERMISSÕES FRANQUIA: Gestão regional de usuários
-      permissoesDoUsuario: JSON.stringify([
-        "READ", 
-        "WRITE", 
-        "TRADE",
-        "MANAGE_FRANCHISES", 
-        "MANAGE_LOCAL_USERS"
-      ])
     }
   ],
 
@@ -280,12 +235,6 @@ export const usuariosData = {
       aceitaVoucher: true,
       tipoOperacao: 1,
       bloqueado: false,
-      // 🎯 PERMISSÕES ASSOCIADO: Apenas operações básicas
-      permissoesDoUsuario: JSON.stringify([
-        "READ", 
-        "WRITE", 
-        "TRADE"
-      ])
     },
     {
       nome: "Lucia Fernandes Oliveira",
@@ -323,12 +272,6 @@ export const usuariosData = {
       aceitaVoucher: true,
       tipoOperacao: 2,
       bloqueado: false,
-      // 🎯 PERMISSÕES ASSOCIADO: Apenas operações básicas
-      permissoesDoUsuario: JSON.stringify([
-        "READ", 
-        "WRITE", 
-        "TRADE"
-      ])
     },
     {
       nome: "Ricardo Almeida Costa",
@@ -366,12 +309,6 @@ export const usuariosData = {
       aceitaVoucher: true,
       tipoOperacao: 1,
       bloqueado: false,
-      // 🎯 PERMISSÕES ASSOCIADO: Apenas operações básicas
-      permissoesDoUsuario: JSON.stringify([
-        "READ", 
-        "WRITE", 
-        "TRADE"
-      ])
     }
   ]
 };

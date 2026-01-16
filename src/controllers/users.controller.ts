@@ -200,6 +200,64 @@ const ensureFilialByUsuario = async (tx: TxClient, usuario: UsuarioModel): Promi
   return tx.filial.findFirst({ where: { usuarioId: usuario.idUsuario } });
 };
 
+const normalizeTipo = (value?: string | null) =>
+  value
+    ?.toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim() || "";
+
+const assignDefaultPermissionGroup = async (
+  tx: TxClient,
+  usuario: UsuarioModel,
+  tipo: string
+) => {
+  const grupos = await tx.permissionGroup.findMany();
+
+  const tipoNormalizado = normalizeTipo(tipo);
+
+  const findMatchingGroup = (target: string) => {
+    if (!target) return null;
+    return (
+      grupos.find((group) => {
+        const candidates = [group.defaultForTipo, group.nome];
+        return candidates.some(
+          (value) => normalizeTipo(value) === target
+        );
+      }) || null
+    );
+  };
+
+  let grupoEncontrado = findMatchingGroup(tipoNormalizado);
+
+  if (!grupoEncontrado && usuario.matrizId === null) {
+    grupoEncontrado = findMatchingGroup(normalizeTipo("Matriz"));
+  }
+
+  if (!grupoEncontrado) {
+    return null;
+  }
+
+  await tx.usuarioPermissionGroup.upsert({
+    where: {
+      usuarioId_groupId_escopo: {
+        usuarioId: usuario.idUsuario,
+        groupId: grupoEncontrado.id,
+        escopo: "DEFAULT",
+      },
+    },
+    update: {},
+    create: {
+      usuarioId: usuario.idUsuario,
+      groupId: grupoEncontrado.id,
+      escopo: "DEFAULT",
+    },
+  });
+
+  return grupoEncontrado;
+};
+
 const ensureTipoConta = async (
   tx: TxClient,
   tipoDaConta: string,
@@ -724,6 +782,7 @@ export const criarUsuario = [
         });
 
         const tipoNormalizado = (tipo || "").toLowerCase();
+        await assignDefaultPermissionGroup(tx, novoUsuario, tipo || "");
         const criadorId = usuarioCriadorId ? parseInt(usuarioCriadorId, 10) : null;
         const criadorUsuario = criadorId
           ? await tx.usuarios.findUnique({ where: { idUsuario: criadorId } })
@@ -1186,7 +1245,6 @@ export const buscarFranquiasPorMatriz = async (req: Request, res: Response) => {
         categoriaId: true,
         subcategoriaId: true,
         taxaComissaoGerente: true,
-        permissoesDoUsuario: true,
       },
     });
     return res.status(200).json(franquias);

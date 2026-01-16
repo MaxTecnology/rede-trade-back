@@ -61,6 +61,9 @@ CREATE INDEX "PermissionGroup_herdaDoGrupoId_idx" ON "PermissionGroup"("herdaDoG
 CREATE INDEX "PermissionGroup_defaultForTipo_idx" ON "PermissionGroup"("defaultForTipo");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "PermissionGroup_nome_key" ON "PermissionGroup"("nome");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Permission_categoria_chave_key" ON "Permission"("categoria", "chave");
 
 -- CreateIndex
@@ -74,6 +77,9 @@ CREATE INDEX "UsuarioPermissionGroup_usuarioId_idx" ON "UsuarioPermissionGroup"(
 
 -- CreateIndex
 CREATE INDEX "UsuarioPermissionGroup_groupId_idx" ON "UsuarioPermissionGroup"("groupId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UsuarioPermissionGroup_usuarioId_groupId_escopo_key" ON "UsuarioPermissionGroup"("usuarioId", "groupId", "escopo");
 
 -- AddForeignKey
 ALTER TABLE "PermissionGroup" ADD CONSTRAINT "PermissionGroup_herdaDoGrupoId_fkey" FOREIGN KEY ("herdaDoGrupoId") REFERENCES "PermissionGroup"("id") ON DELETE SET NULL ON UPDATE CASCADE;
