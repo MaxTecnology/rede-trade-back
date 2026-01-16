@@ -35,27 +35,32 @@ enum ContaStatus {
   ENCERRADA
 }
 
+enum PermissionGrantType {
+  ALLOW
+  DENY
+}
+
 model Usuarios {
-  idUsuario                        Int                   @id @default(autoincrement())
+  idUsuario                        Int                      @id @default(autoincrement())
   usuarioCriadorId                 Int?
   matrizId                         Int?
   nome                             String
-  cpf                              String                @unique
-  email                            String                @unique
+  cpf                              String                   @unique
+  email                            String                   @unique
   senha                            String
   imagem                           String?
-  statusConta                      Boolean?              @default(true)
-  reputacao                        Float?                @default(0.0)
+  statusConta                      Boolean?                 @default(true)
+  reputacao                        Float?                   @default(0.0)
   razaoSocial                      String?
   nomeFantasia                     String?
   cnpj                             String?
   inscEstadual                     String?
   inscMunicipal                    String?
-  mostrarNoSite                    Boolean               @default(true)
+  mostrarNoSite                    Boolean                  @default(true)
   descricao                        String?
   tipo                             String?
   tipoDeMoeda                      String?
-  status                           Boolean               @default(false)
+  status                           Boolean                  @default(false)
   restricao                        String?
   nomeContato                      String?
   telefone                         String?
@@ -77,36 +82,37 @@ model Usuarios {
   categoriaId                      Int?
   subcategoriaId                   Int?
   taxaComissaoGerente              Int?
-  permissoesDoUsuario              String                @default("[]")
+  permissoesDoUsuario              String                   @default("[]")
   tokenResetSenha                  String?
-  bloqueado                        Boolean               @default(false)
-  tipoAuth                         UsuarioAuthTipo       @default(OPERACIONAL)
+  bloqueado                        Boolean                  @default(false)
+  tipoAuth                         UsuarioAuthTipo          @default(OPERACIONAL)
   clienteId                        Int?
   filialId                         Int?
-  createdAt                        DateTime              @default(now())
-  updatedAt                        DateTime              @updatedAt
-  cobrancasGerenciadas             Cobranca[]            @relation("CobrancaToGerente")
-  cobrancas                        Cobranca[]            @relation("CobrancaToUsuario")
-  contasGerenciadas                Conta[]               @relation("GerenteToConta")
-  conta                            Conta?                @relation("UsuariosToConta")
-  fundoPermuta                     FundoPermuta[]        @relation("UsuarioToFundoPermuta")
-  ofertas                          Oferta[]              @relation("OfertaToUsuario")
-  solicitacoesDeCreditoMatriz      SolicitacaoCredito[]  @relation("MatrizToSolicitacao")
-  solicitacoesDeCreditoCriadas     SolicitacaoCredito[]  @relation("UsuariosToUsuarioCriador")
-  solicitacoesDeCreditoSolicitadas SolicitacaoCredito[]  @relation("SolicitacaoToUsuario")
-  transacoesComprador              Transacao[]           @relation("CompradorToUsuario")
-  transacoesVendedor               Transacao[]           @relation("VendedorToUsuario")
-  categoria                        Categoria?            @relation("UsuarioToCategoria", fields: [categoriaId], references: [idCategoria])
-  matriz                           Usuarios?             @relation("MatrizToUsuarios", fields: [matrizId], references: [idUsuario])
-  usuariosFilhosDaMatriz           Usuarios[]            @relation("MatrizToUsuarios")
-  subcategoria                     Subcategoria?         @relation("UsuarioToSubcategoria", fields: [subcategoriaId], references: [idSubcategoria])
-  usuarioCriador                   Usuarios?             @relation("UsuariosToUsuarioCriador", fields: [usuarioCriadorId], references: [idUsuario])
-  usuariosCriados                  Usuarios[]            @relation("UsuariosToUsuarioCriador")
-  auditorias                       AuditoriaFinanceira[] @relation("AuditoriaToUsuario")
-  clienteAuth                      Cliente?              @relation("UsuarioClienteAuth", fields: [clienteId], references: [id])
-  filialAuth                       Filial?               @relation("UsuarioFilialAuth", fields: [filialId], references: [id])
-  matrizPerfil                     Matriz?               @relation("UsuarioToMatrizPerfil")
-  filialPerfil                     Filial?               @relation("UsuarioToFilialPerfil")
+  createdAt                        DateTime                 @default(now())
+  updatedAt                        DateTime                 @updatedAt
+  cobrancasGerenciadas             Cobranca[]               @relation("CobrancaToGerente")
+  cobrancas                        Cobranca[]               @relation("CobrancaToUsuario")
+  contasGerenciadas                Conta[]                  @relation("GerenteToConta")
+  conta                            Conta?                   @relation("UsuariosToConta")
+  fundoPermuta                     FundoPermuta[]           @relation("UsuarioToFundoPermuta")
+  ofertas                          Oferta[]                 @relation("OfertaToUsuario")
+  solicitacoesDeCreditoMatriz      SolicitacaoCredito[]     @relation("MatrizToSolicitacao")
+  solicitacoesDeCreditoCriadas     SolicitacaoCredito[]     @relation("UsuariosToUsuarioCriador")
+  solicitacoesDeCreditoSolicitadas SolicitacaoCredito[]     @relation("SolicitacaoToUsuario")
+  transacoesComprador              Transacao[]              @relation("CompradorToUsuario")
+  transacoesVendedor               Transacao[]              @relation("VendedorToUsuario")
+  categoria                        Categoria?               @relation("UsuarioToCategoria", fields: [categoriaId], references: [idCategoria])
+  matriz                           Usuarios?                @relation("MatrizToUsuarios", fields: [matrizId], references: [idUsuario])
+  usuariosFilhosDaMatriz           Usuarios[]               @relation("MatrizToUsuarios")
+  subcategoria                     Subcategoria?            @relation("UsuarioToSubcategoria", fields: [subcategoriaId], references: [idSubcategoria])
+  usuarioCriador                   Usuarios?                @relation("UsuariosToUsuarioCriador", fields: [usuarioCriadorId], references: [idUsuario])
+  usuariosCriados                  Usuarios[]               @relation("UsuariosToUsuarioCriador")
+  auditorias                       AuditoriaFinanceira[]    @relation("AuditoriaToUsuario")
+  clienteAuth                      Cliente?                 @relation("UsuarioClienteAuth", fields: [clienteId], references: [id])
+  filialAuth                       Filial?                  @relation("UsuarioFilialAuth", fields: [filialId], references: [id])
+  matrizPerfil                     Matriz?                  @relation("UsuarioToMatrizPerfil")
+  filialPerfil                     Filial?                  @relation("UsuarioToFilialPerfil")
+  permissionGroups                 UsuarioPermissionGroup[]
 
   @@index([clienteId])
   @@index([filialId])
@@ -475,4 +481,65 @@ model AuditoriaFinanceira {
   @@index([acao])
   @@index([transacaoId])
   @@index([resultado])
+}
+
+model PermissionGroup {
+  id             Int                         @id @default(autoincrement())
+  nome           String
+  descricao      String?
+  isDefault      Boolean                     @default(false)
+  defaultForTipo String?
+  herdaDoGrupoId Int?
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  herdaDoGrupo   PermissionGroup?            @relation("PermissionGroupHierarchy", fields: [herdaDoGrupoId], references: [id])
+  subGrupos      PermissionGroup[]           @relation("PermissionGroupHierarchy")
+  assignments    PermissionGroupAssignment[]
+  usuarios       UsuarioPermissionGroup[]
+
+  @@index([herdaDoGrupoId])
+  @@index([defaultForTipo])
+}
+
+model Permission {
+  id          Int                         @id @default(autoincrement())
+  categoria   String
+  chave       String
+  descricao   String?
+  ordem       Int?
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  assignments PermissionGroupAssignment[]
+
+  @@unique([categoria, chave])
+}
+
+model PermissionGroupAssignment {
+  id           Int                 @id @default(autoincrement())
+  groupId      Int
+  permissionId Int
+  valor        Boolean             @default(false)
+  grantType    PermissionGrantType @default(ALLOW)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  group        PermissionGroup     @relation(fields: [groupId], references: [id])
+  permission   Permission          @relation(fields: [permissionId], references: [id])
+
+  @@unique([groupId, permissionId])
+  @@index([permissionId])
+}
+
+model UsuarioPermissionGroup {
+  id               Int             @id @default(autoincrement())
+  usuarioId        Int
+  groupId          Int
+  escopo           String          @default("DEFAULT")
+  permissoesExtras Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  usuario          Usuarios        @relation(fields: [usuarioId], references: [idUsuario])
+  group            PermissionGroup @relation(fields: [groupId], references: [id])
+
+  @@index([usuarioId])
+  @@index([groupId])
 }
