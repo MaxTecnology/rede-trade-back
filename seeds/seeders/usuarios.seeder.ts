@@ -94,6 +94,59 @@ export async function seedUsuarios(prisma: PrismaClient) {
     },
   });
 
+  const filialMatrizMaster = await prisma.filial.upsert({
+    where: { usuarioId: matriz.idUsuario },
+    update: {
+      nomeFantasia: usuariosData.matriz.nomeFantasia || usuariosData.matriz.nome,
+      cnpj: usuariosData.matriz.cnpj,
+      tipo: "MASTER",
+      matrizId: matrizRegistro.id,
+      contatos: {
+        nomeContato: usuariosData.matriz.nomeContato,
+        telefone: usuariosData.matriz.telefone,
+        celular: usuariosData.matriz.celular,
+        emailContato: usuariosData.matriz.emailContato,
+        emailSecundario: usuariosData.matriz.emailSecundario,
+        site: usuariosData.matriz.site,
+      },
+      endereco: {
+        logradouro: usuariosData.matriz.logradouro,
+        numero: usuariosData.matriz.numero,
+        complemento: usuariosData.matriz.complemento,
+        bairro: usuariosData.matriz.bairro,
+        cidade: usuariosData.matriz.cidade,
+        estado: usuariosData.matriz.estado,
+        cep: usuariosData.matriz.cep,
+        regiao: usuariosData.matriz.regiao,
+      },
+    },
+    create: {
+      nomeFantasia: usuariosData.matriz.nomeFantasia || usuariosData.matriz.nome,
+      cnpj: usuariosData.matriz.cnpj,
+      tipo: "MASTER",
+      matrizId: matrizRegistro.id,
+      contatos: {
+        nomeContato: usuariosData.matriz.nomeContato,
+        telefone: usuariosData.matriz.telefone,
+        celular: usuariosData.matriz.celular,
+        emailContato: usuariosData.matriz.emailContato,
+        emailSecundario: usuariosData.matriz.emailSecundario,
+        site: usuariosData.matriz.site,
+      },
+      endereco: {
+        logradouro: usuariosData.matriz.logradouro,
+        numero: usuariosData.matriz.numero,
+        complemento: usuariosData.matriz.complemento,
+        bairro: usuariosData.matriz.bairro,
+        cidade: usuariosData.matriz.cidade,
+        estado: usuariosData.matriz.estado,
+        cep: usuariosData.matriz.cep,
+        regiao: usuariosData.matriz.regiao,
+      },
+      usuarioId: matriz.idUsuario,
+    },
+  });
+
   const tipoContaMatriz =
     (await prisma.tipoConta.findFirst({ where: { tipoDaConta: "Matriz" } })) ||
     (await prisma.tipoConta.create({
@@ -125,7 +178,7 @@ export async function seedUsuarios(prisma: PrismaClient) {
       data: {
         usuarioId: matriz.idUsuario,
         matrizId: matrizRegistro.id,
-        filialId: null,
+        filialId: filialMatrizMaster.id,
         clienteId: null,
         tipoContaId: tipoContaMatriz.idTipoConta,
         numeroConta,

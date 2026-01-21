@@ -787,6 +787,7 @@ export const criarUsuario = [
         const criadorUsuario = criadorId
           ? await tx.usuarios.findUnique({ where: { idUsuario: criadorId } })
           : null;
+        const criadorTipoNormalizado = normalizeTipo(criadorUsuario?.tipo);
 
         let matrizRecord: MatrizModel | null = null;
         let matrizUsuarioBase: UsuarioModel | null = null;
@@ -892,12 +893,30 @@ export const criarUsuario = [
           novaConta = contaFilial;
         }
 
+        if (criadorUsuario && criadorTipoNormalizado === "matriz" && matrizRecord) {
+          await ensureFilialRecord(
+            tx,
+            criadorUsuario,
+            matrizRecord,
+            FilialTipo.MASTER
+          );
+        }
+
         if (isAssociado) {
-          const filialParaCliente = filialRecord
+          let filialParaCliente = filialRecord
             ? filialRecord
             : criadorUsuario
             ? await ensureFilialByUsuario(tx, criadorUsuario)
             : null;
+
+          if (!filialParaCliente && criadorUsuario && criadorTipoNormalizado === "matriz" && matrizRecord) {
+            filialParaCliente = await ensureFilialRecord(
+              tx,
+              criadorUsuario,
+              matrizRecord,
+              FilialTipo.MASTER
+            );
+          }
 
           if (!filialParaCliente) {
             throw new Error("Filial responsável não encontrada para o associado.");

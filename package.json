@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "prisma": {
-    "_seed_disabled": "tsx seeds/index.ts"
+    "seed": "tsx seeds/index.ts"
   },
   "scripts": {
     "seed": "ts-node seeds/index.ts",
