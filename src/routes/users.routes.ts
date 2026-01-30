@@ -49,11 +49,19 @@ userRouter.get('/listar-usuarios', apiRateLimit, verifyToken, async (req: Reques
       estado,
       cidade,
       agencia,
-      account 
+      account,
+      usuarioCriadorId
     } = req.query;
 
     // Obter ID do usuário logado para excluir da listagem
     const usuarioLogadoId = res.locals.userId;
+    const usuarioLogado = await prisma.usuarios.findUnique({
+      where: { idUsuario: usuarioLogadoId },
+      select: { tipo: true },
+    });
+    const tipoUsuarioLogado = usuarioLogado?.tipo
+      ? usuarioLogado.tipo.toLowerCase()
+      : null;
     
     // Validação e conversão de parâmetros
     const pageNumber = Math.max(1, parseInt(page as string, 10) || 1);
@@ -116,6 +124,16 @@ userRouter.get('/listar-usuarios', apiRateLimit, verifyToken, async (req: Reques
 
     if (account && typeof account === 'string' && account.trim() && account !== '') {
       whereClause.AND[0].conta.numeroConta = { contains: account.trim(), mode: 'insensitive' };
+    }
+
+
+    if (usuarioCriadorId && typeof usuarioCriadorId === 'string' && usuarioCriadorId.trim()) {
+      const criadorId = parseInt(usuarioCriadorId, 10);
+      if (!isNaN(criadorId)) {
+        whereClause.AND.push({ usuarioCriadorId: criadorId });
+      }
+    } else if (tipoUsuarioLogado && tipoUsuarioLogado !== 'matriz') {
+      whereClause.AND.push({ usuarioCriadorId: usuarioLogadoId });
     }
 
 
@@ -184,6 +202,54 @@ userRouter.get('/listar-usuarios', apiRateLimit, verifyToken, async (req: Reques
     });
   } catch (error) {
     console.error('❌ Erro ao buscar usuários:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
+  }
+});
+
+userRouter.get('/associados/estatisticas', apiRateLimit, verifyToken, async (req: Request, res: Response) => {
+  try {
+    const usuarioLogadoId = res.locals.userId;
+
+    const usuarioLogado = await prisma.usuarios.findUnique({
+      where: { idUsuario: usuarioLogadoId },
+      select: { tipo: true },
+    });
+
+    if (!usuarioLogado) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    const totalGeral = await prisma.usuarios.count({
+      where: {
+        conta: {
+          tipoDaConta: {
+            tipoDaConta: 'Associado',
+          },
+        },
+      },
+    });
+
+    let totalUnidade = totalGeral;
+
+    if (usuarioLogado.tipo?.toLowerCase() !== 'matriz') {
+      totalUnidade = await prisma.usuarios.count({
+        where: {
+          usuarioCriadorId: usuarioLogadoId,
+          conta: {
+            tipoDaConta: {
+              tipoDaConta: 'Associado',
+            },
+          },
+        },
+      });
+    }
+
+    return res.status(200).json({
+      totalGeral,
+      totalUnidade,
+    });
+  } catch (error) {
+    console.error('❌ Erro ao buscar estatísticas de associados:', error);
     return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
