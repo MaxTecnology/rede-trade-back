@@ -35,6 +35,13 @@ enum ContaStatus {
   ENCERRADA
 }
 
+enum SolicitacaoCreditoStatus {
+  PENDENTE
+  ENCAMINHADO_PARA_MATRIZ
+  APROVADO
+  NEGADO
+}
+
 enum PermissionGrantType {
   ALLOW
   DENY
@@ -98,6 +105,8 @@ model Usuarios {
   solicitacoesDeCreditoMatriz      SolicitacaoCredito[]     @relation("MatrizToSolicitacao")
   solicitacoesDeCreditoCriadas     SolicitacaoCredito[]     @relation("UsuariosToUsuarioCriador")
   solicitacoesDeCreditoSolicitadas SolicitacaoCredito[]     @relation("SolicitacaoToUsuario")
+  solicitacoesDeCreditoAnalisadas  SolicitacaoCredito[]     @relation("UsuarioAnaliseSolicitacaoCredito")
+  solicitacoesDeCreditoEncaminhadas SolicitacaoCredito[]    @relation("UsuarioEncaminhamentoSolicitacaoCredito")
   transacoesComprador              Transacao[]              @relation("CompradorToUsuario")
   transacoesVendedor               Transacao[]              @relation("VendedorToUsuario")
   categoria                        Categoria?               @relation("UsuarioToCategoria", fields: [categoriaId], references: [idCategoria])
@@ -427,7 +436,7 @@ model SolicitacaoCredito {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
   valorSolicitado      Float
-  status               String
+  status               SolicitacaoCreditoStatus @default(PENDENTE)
   motivoRejeicao       String?
   usuarioSolicitanteId Int
   descricaoSolicitante String?
@@ -436,9 +445,20 @@ model SolicitacaoCredito {
   comentarioMatriz     String?
   usuarioCriadorId     Int
   matrizId             Int?
+  analisadoPorId       Int?
+  analisadoEm          DateTime?
+  encaminhadoPorId     Int?
+  encaminhadoEm        DateTime?
   matriz               Usuarios? @relation("MatrizToSolicitacao", fields: [matrizId], references: [idUsuario])
   usuarioCriador       Usuarios  @relation("UsuariosToUsuarioCriador", fields: [usuarioCriadorId], references: [idUsuario])
   usuarioSolicitante   Usuarios  @relation("SolicitacaoToUsuario", fields: [usuarioSolicitanteId], references: [idUsuario])
+  analisadoPor         Usuarios? @relation("UsuarioAnaliseSolicitacaoCredito", fields: [analisadoPorId], references: [idUsuario])
+  encaminhadoPor       Usuarios? @relation("UsuarioEncaminhamentoSolicitacaoCredito", fields: [encaminhadoPorId], references: [idUsuario])
+
+  @@index([status])
+  @@index([matrizId, status])
+  @@index([usuarioCriadorId, status])
+  @@index([usuarioSolicitanteId, status])
 }
 
 model FundoPermuta {

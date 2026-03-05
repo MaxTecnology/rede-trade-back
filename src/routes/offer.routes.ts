@@ -5,7 +5,33 @@ import { verifyToken } from "../middlewares/verifyToken.middleware";
 import { upload } from "../middlewares/upload"; // Importar o middleware de upload
 import { apiRateLimit, strictRateLimit } from "../middlewares/rateLimit.middleware"; // Rate limiting DESABILITADO
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
+import { resolveDashboardScope } from "../services/dashboardScope.service";
 const offerRouter = Router();
+
+const buildOfferScopeWhere = (ids: number[] | null) => {
+  const baseWhere = {
+    status: true,
+    vencimento: {
+      gt: new Date(),
+    },
+  };
+
+  if (ids === null) {
+    return baseWhere;
+  }
+
+  if (!ids.length) {
+    return {
+      ...baseWhere,
+      usuarioId: -1,
+    };
+  }
+
+  return {
+    ...baseWhere,
+    usuarioId: ids.length === 1 ? ids[0] : { in: ids },
+  };
+};
 
 // Rota para upload de imagem separada
 offerRouter.post('/upload-imagem', upload.any(), async (req: Request, res: Response) => {
@@ -391,27 +417,35 @@ offerRouter.post(
 // Rota para listar ofertas com a nova lógica simplificada
 offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Request, res: Response) => {
   try {
-    const { 
-      page = 1, 
+    const {
+      page = 1,
       limit = 10,
       titulo,
       cidade,
       nomeCategoria,
       tipo,
       agencia,
-      usuarioId: filtroUsuarioId // Este filtro define se é a página "Minhas Ofertas"
+      usuarioId: filtroUsuarioId // filtro explícito para "Minhas Ofertas"
     } = req.query;
+
+    const usuarioLogadoId = res.locals.userId;
+    const scope = await resolveDashboardScope(usuarioLogadoId);
 
     let whereClause: any = {};
 
-    // Se um filtro de usuarioId for passado na URL (página "Minhas Ofertas"), 
-    // ele tem prioridade e filtramos apenas por aquele usuário.
     if (filtroUsuarioId) {
-      whereClause.usuarioId = parseInt(filtroUsuarioId.toString());
-    } 
-    // SE NÃO HOUVER FILTRO, NENHUMA CONDIÇÃO DE USUÁRIO É ADICIONADA.
-    // Isso fará com que a busca retorne ofertas de TODOS os usuários.
-    // Toda a lógica complexa de hierarquia (Matriz, Gerente, etc.) foi removida daqui.
+      whereClause.usuarioId = parseInt(filtroUsuarioId.toString(), 10);
+    } else if (scope.role === 'matriz') {
+      // nenhuma restrição para a matriz
+    } else if (scope.role === 'associado') {
+      whereClause.usuarioId = scope.ofertas.geralIds
+        ? { in: scope.ofertas.geralIds }
+        : scope.usuarioId;
+    } else {
+      whereClause.usuarioId = scope.ofertas.geralIds
+        ? { in: scope.ofertas.geralIds }
+        : scope.usuarioId;
+    }
 
     // Adicionar outros filtros de busca (título, cidade, etc.)
     let filtrosOferta: any = {};
@@ -532,6 +566,25 @@ offerRouter.get('/listar-ofertas', apiRateLimit, verifyToken, async (req: Reques
   } catch (error: any) {
     console.error('❌ Erro ao listar ofertas:', error.message || error);
     res.status(500).json({ error: 'Erro ao listar ofertas.' });
+  }
+});
+
+offerRouter.get('/estatisticas', apiRateLimit, verifyToken, async (req: Request, res: Response) => {
+  try {
+    const scope = await resolveDashboardScope(res.locals.userId);
+
+    const geralIds = scope.role === 'matriz' ? null : scope.ofertas.geralIds;
+    const unidadeIds = scope.role === 'matriz' ? null : scope.ofertas.unidadeIds;
+
+    const [totalGeral, totalUnidade] = await Promise.all([
+      prisma.oferta.count({ where: buildOfferScopeWhere(geralIds) }),
+      prisma.oferta.count({ where: buildOfferScopeWhere(unidadeIds) }),
+    ]);
+
+    return res.status(200).json({ totalGeral, totalUnidade });
+  } catch (error) {
+    console.error('❌ Erro ao buscar estatísticas de ofertas:', error);
+    return res.status(500).json({ error: 'Erro interno do servidor.' });
   }
 });
 

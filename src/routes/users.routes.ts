@@ -19,6 +19,7 @@ import { validateUsuario } from "../middlewares/validateUsuario.middleware"; // 
 import { validateUsuarioEdicao } from "../middlewares/validateUsuarioEdicao.middleware"; // Middleware de validação para edição
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
 import { resolveUserPermissions } from "../services/permissions.service";
+import { resolveDashboardScope } from "../services/dashboardScope.service";
 
 const userRouter = Router();
 
@@ -209,40 +210,16 @@ userRouter.get('/listar-usuarios', apiRateLimit, verifyToken, async (req: Reques
 userRouter.get('/associados/estatisticas', apiRateLimit, verifyToken, async (req: Request, res: Response) => {
   try {
     const usuarioLogadoId = res.locals.userId;
+    const scope = await resolveDashboardScope(usuarioLogadoId);
 
-    const usuarioLogado = await prisma.usuarios.findUnique({
-      where: { idUsuario: usuarioLogadoId },
-      select: { tipo: true },
-    });
-
-    if (!usuarioLogado) {
-      return res.status(404).json({ error: 'Usuário não encontrado.' });
-    }
-
-    const totalGeral = await prisma.usuarios.count({
-      where: {
-        conta: {
-          tipoDaConta: {
-            tipoDaConta: 'Associado',
-          },
-        },
-      },
-    });
-
-    let totalUnidade = totalGeral;
-
-    if (usuarioLogado.tipo?.toLowerCase() !== 'matriz') {
-      totalUnidade = await prisma.usuarios.count({
-        where: {
-          usuarioCriadorId: usuarioLogadoId,
-          conta: {
-            tipoDaConta: {
-              tipoDaConta: 'Associado',
-            },
-          },
-        },
-      });
-    }
+    const [totalGeral, totalUnidade] = await Promise.all([
+      prisma.usuarios.count({ where: scope.associados.geral }),
+      prisma.usuarios.count({
+        where: scope.role === 'matriz'
+          ? scope.associados.geral
+          : scope.associados.unidade,
+      }),
+    ]);
 
     return res.status(200).json({
       totalGeral,

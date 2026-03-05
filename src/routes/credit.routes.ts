@@ -1,102 +1,257 @@
 import { Router, Request, Response } from "express";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
-import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
+import prisma from "../lib/prisma";
 
 const creditRouter = Router();
-// Rota para o usuário solicitar crédito
+
+type CreditRole = "MATRIZ" | "AGENCIA" | "ASSOCIADO" | "OUTRO";
+
+const CREDIT_STATUS = {
+  PENDING: "PENDENTE",
+  FORWARDED: "ENCAMINHADO_PARA_MATRIZ",
+  APPROVED: "APROVADO",
+  DENIED: "NEGADO",
+} as const;
+
+type CreditStatus = (typeof CREDIT_STATUS)[keyof typeof CREDIT_STATUS];
+
+const FINAL_CREDIT_STATUSES = new Set<CreditStatus>([
+  CREDIT_STATUS.APPROVED,
+  CREDIT_STATUS.DENIED,
+]);
+
+type RequesterContext = {
+  idUsuario: number;
+  nome: string;
+  matrizId: number | null;
+  usuarioCriadorId: number | null;
+  role: CreditRole;
+};
+
+const creditUserSelect = {
+  idUsuario: true,
+  nome: true,
+  email: true,
+  telefone: true,
+  cpf: true,
+  cidade: true,
+  bairro: true,
+  numero: true,
+  complemento: true,
+  conta: true,
+} as const;
+
+const creditInclude = {
+  usuarioCriador: { select: creditUserSelect },
+  matriz: { select: creditUserSelect },
+  usuarioSolicitante: { select: creditUserSelect },
+} as const;
+
+const normalizeText = (value?: string | null) =>
+  value
+    ?.toString()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim() ?? "";
+
+const resolveRole = (tipoConta?: string | null): CreditRole => {
+  const normalized = normalizeText(tipoConta);
+
+  if (normalized === "matriz") return "MATRIZ";
+  if (normalized.includes("associado")) return "ASSOCIADO";
+  if (
+    normalized.includes("franquia") ||
+    normalized.includes("agencia") ||
+    normalized.includes("gerente") ||
+    normalized.includes("master")
+  ) {
+    return "AGENCIA";
+  }
+
+  return "OUTRO";
+};
+
+const normalizeCreditStatus = (value: unknown): CreditStatus | null => {
+  if (typeof value !== "string") return null;
+
+  const normalized = normalizeText(value);
+
+  if (normalized === "pendente") return CREDIT_STATUS.PENDING;
+  if (
+    normalized === "encaminhado para a matriz" ||
+    normalized === "encaminhado para matriz" ||
+    normalized === "encaminhado_para_matriz"
+  ) {
+    return CREDIT_STATUS.FORWARDED;
+  }
+  if (normalized === "aprovado") return CREDIT_STATUS.APPROVED;
+  if (normalized === "negado") return CREDIT_STATUS.DENIED;
+
+  return null;
+};
+
+const isFinalStatus = (status: CreditStatus | null) =>
+  Boolean(status && FINAL_CREDIT_STATUSES.has(status));
+
+const parseValorSolicitado = (value: unknown): number | null => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const normalized = value
+      .replace(/[^\d.,-]/g, "")
+      .replace(/\./g, "")
+      .replace(",", ".");
+    const parsed = Number.parseFloat(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const getRequesterContext = async (
+  requesterId: number
+): Promise<RequesterContext | null> => {
+  const requester = await prisma.usuarios.findUnique({
+    where: { idUsuario: requesterId },
+    select: {
+      idUsuario: true,
+      nome: true,
+      matrizId: true,
+      usuarioCriadorId: true,
+      tipo: true,
+      conta: {
+        select: {
+          tipoDaConta: {
+            select: {
+              tipoDaConta: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!requester) return null;
+
+  const roleSource =
+    requester.conta?.tipoDaConta?.tipoDaConta ?? requester.tipo ?? null;
+
+  return {
+    idUsuario: requester.idUsuario,
+    nome: requester.nome,
+    matrizId: requester.matrizId ?? null,
+    usuarioCriadorId: requester.usuarioCriadorId ?? null,
+    role: resolveRole(roleSource),
+  };
+};
+
+const canAccessUserCredits = (
+  requester: RequesterContext,
+  targetUserId: number,
+  targetUserCreatorId: number | null
+) => {
+  if (requester.role === "MATRIZ") return true;
+  if (requester.idUsuario === targetUserId) return true;
+  if (requester.role === "AGENCIA" && targetUserCreatorId === requester.idUsuario)
+    return true;
+  return false;
+};
+
+const canManageSolicitacao = (
+  requester: RequesterContext,
+  solicitacaoUsuarioCriadorId: number
+) => {
+  if (requester.role === "MATRIZ") return true;
+  if (
+    requester.role === "AGENCIA" &&
+    requester.idUsuario === solicitacaoUsuarioCriadorId
+  ) {
+    return true;
+  }
+  return false;
+};
+
+const canFinalizeFromStatus = (currentStatus: CreditStatus | null) =>
+  currentStatus === CREDIT_STATUS.PENDING ||
+  currentStatus === CREDIT_STATUS.FORWARDED;
+
+const canAgencyForwardFromStatus = (currentStatus: CreditStatus | null) =>
+  currentStatus === CREDIT_STATUS.PENDING;
+
+const toBooleanMatrizAprovacao = (status: CreditStatus) =>
+  status === CREDIT_STATUS.APPROVED;
+
 creditRouter.post(
   "/solicitar",
   verifyToken,
   checkBlocked,
   async (req: Request, res: Response) => {
     try {
-      const { usuarioId, valorSolicitado, descricaoSolicitante, matrizId } =
-        req.body;
+      const { valorSolicitado, descricaoSolicitante } = req.body;
+      const usuarioId = Number(res.locals.userId);
+      const valorSolicitadoParsed = parseValorSolicitado(valorSolicitado);
 
-      // Valide os dados da solicitação (adapte conforme necessário)
-      if (!usuarioId || !valorSolicitado) {
+      if (!usuarioId || !valorSolicitadoParsed || valorSolicitadoParsed <= 0) {
         return res
           .status(400)
           .json({ error: "Dados de solicitação inválidos" });
       }
 
-      // Verifique se o usuário existe
+      const requester = await getRequesterContext(usuarioId);
+      if (!requester) {
+        return res.status(401).json({ error: "Usuário autenticado inválido." });
+      }
+
       const usuario = await prisma.usuarios.findUnique({
         where: { idUsuario: usuarioId },
+        select: {
+          idUsuario: true,
+          usuarioCriadorId: true,
+          matrizId: true,
+        },
       });
 
       if (!usuario) {
         return res.status(404).json({ error: "Usuário não encontrado" });
       }
 
-      // Crie a solicitação de crédito no banco de dados
+      let matrizId = usuario.matrizId ?? null;
+      if (!matrizId && usuario.usuarioCriadorId) {
+        const criador = await prisma.usuarios.findUnique({
+          where: { idUsuario: usuario.usuarioCriadorId },
+          select: { matrizId: true },
+        });
+        matrizId = criador?.matrizId ?? null;
+      }
+      if (!matrizId && requester.role === "MATRIZ") {
+        matrizId = requester.idUsuario;
+      }
+
       const solicitacaoCredito = await prisma.solicitacaoCredito.create({
         data: {
-          valorSolicitado,
-          matrizId: matrizId || null, // Defina matrizId como null se não fornecido
-          status: "Pendente",
+          valorSolicitado: valorSolicitadoParsed,
+          matrizId,
+          status: CREDIT_STATUS.PENDING,
           descricaoSolicitante,
           usuarioSolicitanteId: usuarioId,
-          usuarioCriadorId: usuario.usuarioCriadorId ?? usuarioId, // Garante referência válida
+          usuarioCriadorId: usuario.usuarioCriadorId ?? usuarioId,
         },
-        include: {
-          usuarioCriador: {
-            select: {
-              idUsuario: true,
-              nome: true,
-              email: true,
-              telefone: true,
-              cpf: true,
-              cidade: true,
-              bairro: true,
-              numero: true,
-              complemento: true,
-              conta: true,
-            },
-          },
-          matriz: {
-            select: {
-              idUsuario: true,
-              nome: true,
-              email: true,
-              telefone: true,
-              cpf: true,
-              cidade: true,
-              bairro: true,
-              numero: true,
-              complemento: true,
-            },
-          },
-          usuarioSolicitante: {
-            select: {
-              idUsuario: true,
-              nome: true,
-              email: true,
-              telefone: true,
-              cpf: true,
-              cidade: true,
-              bairro: true,
-              numero: true,
-              complemento: true,
-              conta: true,
-            },
-          },
-        },
+        include: creditInclude,
       });
 
-      res.status(200).json({
+      return res.status(200).json({
         message: "Solicitação de crédito enviada com sucesso",
         solicitacaoCredito,
       });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: "Erro interno no servidor" });
+      return res.status(500).json({ error: "Erro interno no servidor" });
     }
   }
 );
 
-// Rota para editar uma solicitação de crédito
 creditRouter.put(
   "/editar/:solicitacaoId",
   verifyToken,
@@ -105,15 +260,25 @@ creditRouter.put(
     try {
       const solicitacaoId = parseInt(req.params.solicitacaoId, 10);
       const { valorSolicitado, descricaoSolicitante } = req.body;
+      const requesterId = Number(res.locals.userId);
+      const requester = await getRequesterContext(requesterId);
+      const valorSolicitadoParsed = parseValorSolicitado(valorSolicitado);
 
-      // Valide os dados da edição (adapte conforme necessário)
-      if (!valorSolicitado) {
+      if (!requester) {
+        return res.status(401).json({ error: "Usuário autenticado inválido." });
+      }
+
+      if (!valorSolicitadoParsed || valorSolicitadoParsed <= 0) {
         return res.status(400).json({ error: "Dados de edição inválidos" });
       }
 
-      // Verifique se a solicitação de crédito existe
       const solicitacaoCredito = await prisma.solicitacaoCredito.findUnique({
         where: { idSolicitacaoCredito: solicitacaoId },
+        select: {
+          idSolicitacaoCredito: true,
+          status: true,
+          usuarioSolicitanteId: true,
+        },
       });
 
       if (!solicitacaoCredito) {
@@ -122,163 +287,156 @@ creditRouter.put(
           .json({ error: "Solicitação de crédito não encontrada" });
       }
 
-      // Atualize os dados da solicitação de crédito no banco de dados
+      if (
+        requester.role !== "MATRIZ" &&
+        solicitacaoCredito.usuarioSolicitanteId !== requester.idUsuario
+      ) {
+        return res.status(403).json({
+          error: "Você não possui permissão para editar esta solicitação.",
+        });
+      }
+
+      const statusAtual = normalizeCreditStatus(solicitacaoCredito.status);
+      if (statusAtual !== CREDIT_STATUS.PENDING) {
+        return res.status(409).json({
+          error:
+            "Apenas solicitações pendentes podem ser editadas antes da análise.",
+        });
+      }
+
       const solicitacaoAtualizada = await prisma.solicitacaoCredito.update({
         where: { idSolicitacaoCredito: solicitacaoId },
         data: {
-          valorSolicitado,
+          valorSolicitado: valorSolicitadoParsed,
           descricaoSolicitante,
         },
       });
 
-      res.status(200).json({
+      return res.status(200).json({
         message: "Solicitação de crédito atualizada com sucesso",
         solicitacaoAtualizada,
       });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: "Erro interno no servidor" });
+      return res.status(500).json({ error: "Erro interno no servidor" });
     }
   }
 );
-// Rota para listar os créditos solicitados por um usuário
-creditRouter.get("/listar/:usuarioId", async (req: Request, res: Response) => {
-  try {
-    const usuarioId = parseInt(req.params.usuarioId, 10);
 
-    // Verifique se o usuário existe
-    const usuario = await prisma.usuarios.findUnique({
-      where: { idUsuario: usuarioId },
-    });
+creditRouter.get(
+  "/listar/:usuarioId",
+  verifyToken,
+  checkBlocked,
+  async (req: Request, res: Response) => {
+    try {
+      const usuarioId = parseInt(req.params.usuarioId, 10);
+      const requesterId = Number(res.locals.userId);
+      const requester = await getRequesterContext(requesterId);
 
-    if (!usuario) {
-      return res.status(404).json({ error: "Usuário não encontrado" });
+      if (!requester) {
+        return res.status(401).json({ error: "Usuário autenticado inválido." });
+      }
+
+      const usuario = await prisma.usuarios.findUnique({
+        where: { idUsuario: usuarioId },
+        select: {
+          idUsuario: true,
+          usuarioCriadorId: true,
+        },
+      });
+
+      if (!usuario) {
+        return res.status(404).json({ error: "Usuário não encontrado" });
+      }
+
+      if (
+        !canAccessUserCredits(
+          requester,
+          usuario.idUsuario,
+          usuario.usuarioCriadorId ?? null
+        )
+      ) {
+        return res.status(403).json({
+          error: "Você não possui permissão para visualizar estes créditos.",
+        });
+      }
+
+      const solicitacoesCredito = await prisma.solicitacaoCredito.findMany({
+        where: { usuarioSolicitanteId: usuarioId },
+        include: creditInclude,
+        orderBy: { createdAt: "desc" },
+      });
+
+      return res.status(200).json({ solicitacoesCredito });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: "Erro interno no servidor" });
     }
-
-    // Consulte as solicitações de crédito para o usuário
-    const solicitacoesCredito = await prisma.solicitacaoCredito.findMany({
-      where: { usuarioSolicitanteId: usuarioId },
-      include: {
-        usuarioCriador: {
-          select: {
-            idUsuario: true,
-            nome: true,
-            email: true,
-            telefone: true,
-            cpf: true,
-            cidade: true,
-            bairro: true,
-            numero: true,
-            complemento: true,
-            conta: true,
-          },
-        },
-        matriz: {
-          select: {
-            idUsuario: true,
-            nome: true,
-            email: true,
-            telefone: true,
-            cpf: true,
-            cidade: true,
-            bairro: true,
-            numero: true,
-            complemento: true,
-            conta: true,
-          },
-        },
-        usuarioSolicitante: {
-          select: {
-            idUsuario: true,
-            nome: true,
-            email: true,
-            telefone: true,
-            cpf: true,
-            cidade: true,
-            bairro: true,
-            numero: true,
-            complemento: true,
-            conta: true,
-          },
-        },
-      },
-    });
-
-    res.status(200).json({ solicitacoesCredito });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erro interno no servidor" });
   }
-});
+);
 
-// Rota para listar todos os créditos solicitados
-creditRouter.get("/listar-todos", async (req: Request, res: Response) => {
-  try {
-    // Consulte todas as solicitações de crédito no banco de dados
-    const todasSolicitacoes = await prisma.solicitacaoCredito.findMany({
-      include: {
-        usuarioCriador: {
-          select: {
-            idUsuario: true,
-            nome: true,
-            email: true,
-            telefone: true,
-            cpf: true,
-            cidade: true,
-            bairro: true,
-            numero: true,
-            complemento: true,
-            conta: true,
-          },
-        },
-        matriz: {
-          select: {
-            idUsuario: true,
-            nome: true,
-            email: true,
-            telefone: true,
-            cpf: true,
-            cidade: true,
-            bairro: true,
-            numero: true,
-            complemento: true,
-            conta: true,
-          },
-        },
-        usuarioSolicitante: {
-          select: {
-            idUsuario: true,
-            nome: true,
-            email: true,
-            telefone: true,
-            cpf: true,
-            cidade: true,
-            bairro: true,
-            numero: true,
-            complemento: true,
-            conta: true,
-          },
-        },
-      },
-    });
+creditRouter.get(
+  "/listar-todos",
+  verifyToken,
+  checkBlocked,
+  async (_req: Request, res: Response) => {
+    try {
+      const requesterId = Number(res.locals.userId);
+      const requester = await getRequesterContext(requesterId);
 
-    res.status(200).json({ todasSolicitacoes });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erro interno no servidor" });
+      if (!requester) {
+        return res.status(401).json({ error: "Usuário autenticado inválido." });
+      }
+
+      if (requester.role !== "MATRIZ") {
+        return res.status(403).json({
+          error: "Apenas a Matriz pode listar todos os créditos.",
+        });
+      }
+
+      const todasSolicitacoes = await prisma.solicitacaoCredito.findMany({
+        include: creditInclude,
+        orderBy: { createdAt: "desc" },
+      });
+
+      return res.status(200).json({ todasSolicitacoes });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: "Erro interno no servidor" });
+    }
   }
-});
+);
 
-// Rota para o usuário criador listar os créditos solicitados por seus usuários filhos
 creditRouter.get(
   "/listar-filhos/:usuarioCriadorId",
+  verifyToken,
+  checkBlocked,
   async (req: Request, res: Response) => {
     try {
       const usuarioCriadorId = parseInt(req.params.usuarioCriadorId, 10);
+      const requesterId = Number(res.locals.userId);
+      const requester = await getRequesterContext(requesterId);
 
-      // Verifique se o usuário criador existe
+      if (!requester) {
+        return res.status(401).json({ error: "Usuário autenticado inválido." });
+      }
+
+      const isRequesterInOwnScope =
+        requester.idUsuario === usuarioCriadorId ||
+        requester.usuarioCriadorId === usuarioCriadorId;
+
+      if (
+        requester.role !== "MATRIZ" &&
+        !(requester.role === "AGENCIA" && isRequesterInOwnScope)
+      ) {
+        return res.status(403).json({
+          error: "Você não possui permissão para listar créditos deste escopo.",
+        });
+      }
+
       const usuarioCriador = await prisma.usuarios.findUnique({
         where: { idUsuario: usuarioCriadorId },
+        select: { idUsuario: true },
       });
 
       if (!usuarioCriador) {
@@ -287,75 +445,30 @@ creditRouter.get(
           .json({ error: "Usuário criador não encontrado" });
       }
 
-      // Consulte os usuários filhos do usuário criador
       const usuariosFilhos = await prisma.usuarios.findMany({
-        where: { usuarioCriadorId: usuarioCriadorId },
+        where: { usuarioCriadorId },
+        select: { idUsuario: true },
       });
 
-      // Coleta os IDs dos usuários filhos
-      const idsUsuariosFilhos = usuariosFilhos.map(
-        (usuario) => usuario.idUsuario
-      );
+      const idsUsuariosFilhos = usuariosFilhos.map((usuario) => usuario.idUsuario);
 
-      // Consulte as solicitações de crédito para os usuários filhos
-      const solicitacoesDosFilhos = await prisma.solicitacaoCredito.findMany({
-        where: { usuarioSolicitanteId: { in: idsUsuariosFilhos } },
-        include: {
-          usuarioCriador: {
-            select: {
-              idUsuario: true,
-              nome: true,
-              email: true,
-              telefone: true,
-              cpf: true,
-              cidade: true,
-              bairro: true,
-              numero: true,
-              complemento: true,
-              conta: true,
-            },
-          },
-          matriz: {
-            select: {
-              idUsuario: true,
-              nome: true,
-              email: true,
-              telefone: true,
-              cpf: true,
-              cidade: true,
-              bairro: true,
-              numero: true,
-              complemento: true,
-              conta: true,
-            },
-          },
-          usuarioSolicitante: {
-            select: {
-              idUsuario: true,
-              nome: true,
-              email: true,
-              telefone: true,
-              cpf: true,
-              cidade: true,
-              bairro: true,
-              numero: true,
-              complemento: true,
-              conta: true,
-            },
-          },
-        },
-      });
+      const solicitacoesDosFilhos =
+        idsUsuariosFilhos.length > 0
+          ? await prisma.solicitacaoCredito.findMany({
+              where: { usuarioSolicitanteId: { in: idsUsuariosFilhos } },
+              include: creditInclude,
+              orderBy: { createdAt: "desc" },
+            })
+          : [];
 
-      res.status(200).json({ solicitacoesDosFilhos });
+      return res.status(200).json({ solicitacoesDosFilhos });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: "Erro interno no servidor" });
+      return res.status(500).json({ error: "Erro interno no servidor" });
     }
   }
 );
 
-
-// Rota para o usuário criador encaminhar a aprovação para a matriz ou negar o crédito
 creditRouter.put(
   "/encaminhar/:solicitacaoId",
   verifyToken,
@@ -363,12 +476,37 @@ creditRouter.put(
   async (req: Request, res: Response) => {
     try {
       const solicitacaoId = parseInt(req.params.solicitacaoId, 10);
-      const { status, comentarioAgencia, matrizId } = req.body;
+      const { status, comentarioAgencia } = req.body;
+      const requesterId = Number(res.locals.userId);
+      const requester = await getRequesterContext(requesterId);
+      const novoStatus = normalizeCreditStatus(status);
 
-      // Verifique se a solicitação de crédito existe
+      if (!requester) {
+        return res.status(401).json({ error: "Usuário autenticado inválido." });
+      }
+
+      if (
+        novoStatus !== CREDIT_STATUS.FORWARDED &&
+        novoStatus !== CREDIT_STATUS.DENIED
+      ) {
+        return res.status(400).json({ error: "Status inválido" });
+      }
+
       const solicitacaoCredito = await prisma.solicitacaoCredito.findUnique({
         where: { idSolicitacaoCredito: solicitacaoId },
-        include: { usuarioCriador: true }, // Inclua informações sobre o usuário criador
+        select: {
+          idSolicitacaoCredito: true,
+          status: true,
+          usuarioCriadorId: true,
+          matrizId: true,
+          usuarioCriador: {
+            select: {
+              idUsuario: true,
+              matrizId: true,
+              usuarioCriadorId: true,
+            },
+          },
+        },
       });
 
       if (!solicitacaoCredito) {
@@ -377,149 +515,112 @@ creditRouter.put(
           .json({ error: "Solicitação de crédito não encontrada" });
       }
 
-      // Verifique se o status fornecido é válido
-      if (status !== "Encaminhado para a matriz" && status !== "Negado") {
-        return res.status(400).json({ error: "Status inválido" });
+      if (!canManageSolicitacao(requester, solicitacaoCredito.usuarioCriadorId)) {
+        return res.status(403).json({
+          error: "Você não possui permissão para encaminhar esta solicitação.",
+        });
       }
-      // Utiliza o usuarioCriadorId diretamente como matrizId
-      const providedMatrizId =
-        matrizId || solicitacaoCredito.usuarioCriador?.usuarioCriadorId;
 
-      if (!providedMatrizId) {
-        return res
-          .status(400)
-          .json({ error: "matrizId não fornecido ou não disponível" });
+      const statusAtual = normalizeCreditStatus(solicitacaoCredito.status);
+      if (isFinalStatus(statusAtual)) {
+        return res.status(409).json({
+          error: "Solicitação finalizada não permite novo encaminhamento.",
+        });
       }
-      // Atualize o status da solicitação de crédito
+
+      if (
+        requester.role === "AGENCIA" &&
+        !canAgencyForwardFromStatus(statusAtual)
+      ) {
+        return res.status(409).json({
+          error:
+            "A agência só pode encaminhar ou negar solicitações pendentes.",
+        });
+      }
+
+      if (requester.role === "MATRIZ" && novoStatus === CREDIT_STATUS.DENIED) {
+        return res.status(400).json({
+          error:
+            "A Matriz deve usar a rota de finalizar análise para aprovar ou negar.",
+        });
+      }
+
+      const resolvedMatrizId =
+        solicitacaoCredito.matrizId ??
+        solicitacaoCredito.usuarioCriador?.matrizId ??
+        solicitacaoCredito.usuarioCriador?.usuarioCriadorId ??
+        requester.matrizId ??
+        (requester.role === "MATRIZ" ? requester.idUsuario : null);
+
+      if (!resolvedMatrizId) {
+        return res.status(400).json({
+          error: "Não foi possível resolver a matriz da solicitação.",
+        });
+      }
+
       const solicitacaoAtualizada = await prisma.solicitacaoCredito.update({
         where: { idSolicitacaoCredito: solicitacaoId },
         data: {
-          status,
-          matrizId: providedMatrizId,
-          comentarioAgencia:
-            status === "Encaminhado para a matriz" ? comentarioAgencia : null,
+          status: novoStatus,
+          matrizId: resolvedMatrizId,
+          comentarioAgencia: comentarioAgencia ?? null,
+          encaminhadoPorId: requester.idUsuario,
+          encaminhadoEm: new Date(),
         },
-        include: {
-          usuarioCriador: {
-            select: {
-              idUsuario: true,
-              nome: true,
-              email: true,
-              telefone: true,
-              cpf: true,
-              cidade: true,
-              bairro: true,
-              numero: true,
-              complemento: true,
-            },
-          },
-          matriz: {
-            select: {
-              idUsuario: true,
-              nome: true,
-              email: true,
-              telefone: true,
-              cpf: true,
-              cidade: true,
-              bairro: true,
-              numero: true,
-              complemento: true,
-            },
-          },
-          usuarioSolicitante: {
-            select: {
-              idUsuario: true,
-              nome: true,
-              email: true,
-              telefone: true,
-              cpf: true,
-              cidade: true,
-              bairro: true,
-              numero: true,
-              complemento: true,
-            },
-          },
-        },
+        include: creditInclude,
       });
 
-      res.status(200).json({
-        message: `Solicitação ${solicitacaoId} ${status.toLowerCase()} com sucesso`,
+      return res.status(200).json({
+        message: `Solicitação ${solicitacaoId} atualizada com sucesso`,
         solicitacaoAtualizada,
       });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: "Erro interno no servidor" });
+      return res.status(500).json({ error: "Erro interno no servidor" });
     }
   }
 );
 
-// Rota para a matriz ver todos os créditos enviados para análise
-creditRouter.get("/matriz/analisar", async (req: Request, res: Response) => {
-  try {
-    // Consulta todas as solicitações de crédito com status "Encaminhado para a matriz"
-    const solicitacoesEmAnalise = await prisma.solicitacaoCredito.findMany({
-      where: {
-        status: {
-          in: ["Encaminhado para a matriz", "Pendente"]
-        }
-      },
-      include: {
-        usuarioCriador: {
-          select: {
-            idUsuario: true,
-            nome: true,
-            email: true,
-            telefone: true,
-            cpf: true,
-            cidade: true,
-            bairro: true,
-            numero: true,
-            complemento: true,
-            conta: true,
-          },
-        },
-        matriz: {
-          select: {
-            idUsuario: true,
-            nome: true,
-            email: true,
-            telefone: true,
-            cpf: true,
-            cidade: true,
-            bairro: true,
-            numero: true,
-            complemento: true,
-            conta: true,
-          },
-        },
-        usuarioSolicitante: {
-          select: {
-            idUsuario: true,
-            nome: true,
-            email: true,
-            telefone: true,
-            cpf: true,
-            cidade: true,
-            bairro: true,
-            numero: true,
-            complemento: true,
-            conta: true,
-          },
-        },
-      },
-    });
-    res.status(200).json({
-      message: "Lista de créditos enviados para análise da matriz",
-      solicitacoesEmAnalise,
-      // solicitacoesRelacionadasAoMatriz,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Erro interno no servidor" });
-  }
-});
+creditRouter.get(
+  "/matriz/analisar",
+  verifyToken,
+  checkBlocked,
+  async (_req: Request, res: Response) => {
+    try {
+      const requesterId = Number(res.locals.userId);
+      const requester = await getRequesterContext(requesterId);
 
-// Rota para a matriz aprovar ou negar um crédito
+      if (!requester) {
+        return res.status(401).json({ error: "Usuário autenticado inválido." });
+      }
+
+      if (requester.role !== "MATRIZ") {
+        return res.status(403).json({
+          error: "Apenas a Matriz pode acessar créditos para análise global.",
+        });
+      }
+
+      const solicitacoesEmAnalise = await prisma.solicitacaoCredito.findMany({
+        where: {
+          status: {
+            in: [CREDIT_STATUS.FORWARDED, CREDIT_STATUS.PENDING],
+          },
+        },
+        include: creditInclude,
+        orderBy: { createdAt: "desc" },
+      });
+
+      return res.status(200).json({
+        message: "Lista de créditos enviados para análise da matriz",
+        solicitacoesEmAnalise,
+      });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: "Erro interno no servidor" });
+    }
+  }
+);
+
 creditRouter.put(
   "/finalizar-analise/:solicitacaoId",
   verifyToken,
@@ -528,13 +629,43 @@ creditRouter.put(
     try {
       const solicitacaoId = parseInt(req.params.solicitacaoId, 10);
       const { status, comentarioMatriz } = req.body;
+      const requesterId = Number(res.locals.userId);
+      const requester = await getRequesterContext(requesterId);
+      const novoStatus = normalizeCreditStatus(status);
 
-      // Verifique se a solicitação de crédito existe
+      if (!requester) {
+        return res.status(401).json({ error: "Usuário autenticado inválido." });
+      }
+
+      if (requester.role !== "MATRIZ") {
+        return res.status(403).json({
+          error: "Apenas a Matriz pode finalizar análise de crédito.",
+        });
+      }
+
+      if (
+        novoStatus !== CREDIT_STATUS.APPROVED &&
+        novoStatus !== CREDIT_STATUS.DENIED
+      ) {
+        return res.status(400).json({ error: "Status inválido" });
+      }
+
       const solicitacaoCredito = await prisma.solicitacaoCredito.findUnique({
         where: { idSolicitacaoCredito: solicitacaoId },
         include: {
-          usuarioSolicitante: { include: { conta: true } },
-          matriz: true,
+          usuarioSolicitante: {
+            select: {
+              idUsuario: true,
+              conta: {
+                select: {
+                  idConta: true,
+                  limiteCredito: true,
+                  limiteUtilizado: true,
+                  limiteDisponivel: true,
+                },
+              },
+            },
+          },
         },
       });
 
@@ -543,115 +674,115 @@ creditRouter.put(
           .status(404)
           .json({ error: "Solicitação de crédito não encontrada" });
       }
-      // Obtenha o limiteCredito antes da aprovação
-      const limiteCreditoAntes =
-        solicitacaoCredito.usuarioSolicitante?.conta?.limiteCredito || 0;
 
-      // Verifique se o status fornecido é válido
-      if (status !== "Aprovado" && status !== "Negado") {
-        return res.status(400).json({ error: "Status inválido" });
+      const statusAtual = normalizeCreditStatus(solicitacaoCredito.status);
+      if (isFinalStatus(statusAtual)) {
+        return res.status(409).json({
+          error: "Solicitação já foi finalizada e não pode ser reanalisada.",
+        });
       }
 
-      // Atualize o status da solicitação de crédito
-      const solicitacaoAtualizada = await prisma.solicitacaoCredito.update({
-        where: { idSolicitacaoCredito: solicitacaoId },
-        data: {
-          status,
-          matrizAprovacao: status === "Aprovado",
-          comentarioMatriz: status === "Aprovado" ? comentarioMatriz : null,
-        },
-        include: {
-          usuarioCriador: {
-            select: {
-              idUsuario: true,
-              nome: true,
-              email: true,
-              telefone: true,
-              cpf: true,
-              cidade: true,
-              bairro: true,
-              numero: true,
-              complemento: true,
-              conta: {
-                select: {
-                  limiteCredito: true,
-                },
-              },
-            },
-          },
-          matriz: true,
-          usuarioSolicitante: {
-            select: {
-              idUsuario: true,
-              nome: true,
-              email: true,
-              telefone: true,
-              cpf: true,
-              cidade: true,
-              bairro: true,
-              numero: true,
-              complemento: true,
-            },
-          },
-        },
-      });
+      if (!canFinalizeFromStatus(statusAtual)) {
+        return res.status(409).json({
+          error: "Transição de status inválida para finalização.",
+        });
+      }
 
-      // Se o status for "Aprovado", aumente o limiteCredito da conta associada ao usuário solicitante
-      if (status === "Aprovado") {
-        const novoLimiteCredito =
-          limiteCreditoAntes + solicitacaoCredito.valorSolicitado;
+      const limiteCreditoAntes =
+        solicitacaoCredito.usuarioSolicitante?.conta?.limiteCredito ?? 0;
+      let limiteCreditoDepois = limiteCreditoAntes;
 
-        // Atualize o limiteCredito na base de dados
-        if (solicitacaoCredito.usuarioSolicitante?.conta) {
-          await prisma.conta.update({
-            where: {
-              idConta: solicitacaoCredito.usuarioSolicitante.conta.idConta,
-            },
+      const resultado = await prisma.$transaction(async (tx) => {
+        const solicitacaoAtualizada = await tx.solicitacaoCredito.update({
+          where: { idSolicitacaoCredito: solicitacaoId },
+          data: {
+            status: novoStatus,
+            matrizAprovacao: toBooleanMatrizAprovacao(novoStatus),
+            comentarioMatriz: comentarioMatriz ?? null,
+            analisadoPorId: requester.idUsuario,
+            analisadoEm: new Date(),
+            matrizId: solicitacaoCredito.matrizId ?? requester.idUsuario,
+          },
+          include: creditInclude,
+        });
+
+        if (novoStatus === CREDIT_STATUS.APPROVED) {
+          const contaSolicitante = solicitacaoCredito.usuarioSolicitante?.conta;
+          if (!contaSolicitante) {
+            throw new Error("Conta não encontrada para aprovação do crédito.");
+          }
+
+          const limiteCreditoAtual = contaSolicitante.limiteCredito ?? 0;
+          const limiteUtilizadoAtual = contaSolicitante.limiteUtilizado ?? 0;
+          limiteCreditoDepois =
+            limiteCreditoAtual + solicitacaoCredito.valorSolicitado;
+          const limiteDisponivelDepois =
+            limiteCreditoDepois - limiteUtilizadoAtual;
+
+          await tx.conta.update({
+            where: { idConta: contaSolicitante.idConta },
             data: {
-              limiteCredito: novoLimiteCredito,
+              limiteCredito: limiteCreditoDepois,
+              limiteDisponivel: limiteDisponivelDepois,
             },
           });
-          // Registre o valor no FundoPermuta
-          const fundoPermutaData = {
-            valor: solicitacaoCredito.valorSolicitado,
-            usuarioId: solicitacaoCredito.usuarioSolicitante.idUsuario,
-          };
 
-          await prisma.fundoPermuta.create({
-            data: fundoPermutaData,
+          await tx.fundoPermuta.create({
+            data: {
+              valor: solicitacaoCredito.valorSolicitado,
+              usuarioId: solicitacaoCredito.usuarioSolicitante.idUsuario,
+            },
           });
-        } else {
-          console.error("Conta não encontrada para a solicitação de crédito.");
-          // Trate conforme necessário (lançar exceção, retornar erro, etc.)
         }
 
-        // Obtenha o limiteCredito depois da aprovação
-        const limiteCreditoDepois = novoLimiteCredito;
+        await tx.auditoriaFinanceira.create({
+          data: {
+            usuarioId: requester.idUsuario,
+            usuarioExecutor: requester.nome,
+            acao:
+              novoStatus === CREDIT_STATUS.APPROVED
+                ? "CREDITO_APROVADO"
+                : "CREDITO_NEGADO",
+            entidade: "SOLICITACAO_CREDITO",
+            entidadeId: solicitacaoCredito.idSolicitacaoCredito,
+            dadosAnteriores: {
+              status: solicitacaoCredito.status,
+              limiteCredito: limiteCreditoAntes,
+            },
+            dadosNovos: {
+              status: novoStatus,
+              limiteCredito: limiteCreditoDepois,
+            },
+            valorOperacao: solicitacaoCredito.valorSolicitado,
+            contasAfetadas: solicitacaoCredito.usuarioSolicitante?.conta
+              ? [solicitacaoCredito.usuarioSolicitante.conta.idConta]
+              : [],
+            detalhesOperacao: `Análise de crédito finalizada pela matriz para solicitação ${solicitacaoId}.`,
+            resultado: "SUCESSO",
+          },
+        });
 
-        res.status(200).json({
-          message: `Solicitação ${solicitacaoId} analisada pela matriz`,
-          limiteCreditoAntes,
-          limiteCreditoDepois,
-          solicitacaoAtualizada,
-        });
-      } else {
-        // Se o status não for "Aprovado", não há alteração no limiteCredito
-        res.status(200).json({
-          message: `Solicitação ${solicitacaoId} analisada pela matriz`,
-          limiteCreditoAntes,
-          solicitacaoAtualizada,
-        });
-      }
+        return solicitacaoAtualizada;
+      });
+
+      return res.status(200).json({
+        message: `Solicitação ${solicitacaoId} analisada pela matriz`,
+        limiteCreditoAntes,
+        limiteCreditoDepois,
+        solicitacaoAtualizada: resultado,
+      });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: "Erro interno no servidor" });
+      return res.status(500).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Erro interno no servidor",
+      });
     }
   }
 );
 
-
-
-// Rota para apagar uma solicitação de crédito
 creditRouter.delete(
   "/apagar/:solicitacaoId",
   verifyToken,
@@ -659,10 +790,20 @@ creditRouter.delete(
   async (req: Request, res: Response) => {
     try {
       const solicitacaoId = parseInt(req.params.solicitacaoId, 10);
+      const requesterId = Number(res.locals.userId);
+      const requester = await getRequesterContext(requesterId);
 
-      // Verifique se a solicitação de crédito existe
+      if (!requester) {
+        return res.status(401).json({ error: "Usuário autenticado inválido." });
+      }
+
       const solicitacaoCredito = await prisma.solicitacaoCredito.findUnique({
         where: { idSolicitacaoCredito: solicitacaoId },
+        select: {
+          idSolicitacaoCredito: true,
+          status: true,
+          usuarioSolicitanteId: true,
+        },
       });
 
       if (!solicitacaoCredito) {
@@ -671,19 +812,35 @@ creditRouter.delete(
           .json({ error: "Solicitação de crédito não encontrada" });
       }
 
-      // Apague a solicitação de crédito do banco de dados
+      if (
+        requester.role !== "MATRIZ" &&
+        solicitacaoCredito.usuarioSolicitanteId !== requester.idUsuario
+      ) {
+        return res.status(403).json({
+          error: "Você não possui permissão para apagar esta solicitação.",
+        });
+      }
+
+      const statusAtual = normalizeCreditStatus(solicitacaoCredito.status);
+      if (statusAtual !== CREDIT_STATUS.PENDING) {
+        return res.status(409).json({
+          error: "Apenas solicitações pendentes podem ser apagadas.",
+        });
+      }
+
       await prisma.solicitacaoCredito.delete({
         where: { idSolicitacaoCredito: solicitacaoId },
       });
 
-      res.status(200).json({
+      return res.status(200).json({
         message: "Solicitação de crédito apagada com sucesso",
         solicitacaoCredito,
       });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: "Erro interno no servidor" });
+      return res.status(500).json({ error: "Erro interno no servidor" });
     }
   }
 );
+
 export default creditRouter;

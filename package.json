@@ -23,7 +23,7 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "start": "ts-node src/index.ts",
     "build": "tsc",
-    "deploy": "npm run build && cp -r dist /var/www/rede-trade-api/ && pm2 restart rede-trade-api"
+    "deploy": "npm run build && cp -r dist /var/www/rede-trade-api/ && cp -r prisma /var/www/rede-trade-api/ && cd /var/www/rede-trade-api && npx prisma generate --schema=./prisma/schema.prisma && pm2 restart rede-trade-api --update-env"
   },
   "keywords": [],
   "author": "",

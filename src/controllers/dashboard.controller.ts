@@ -155,7 +155,7 @@ export const getValorTotalCreditosAprovados = async (
           valorSolicitado: true,
         },
         where: {
-          status: "Aprovado",
+          status: "APROVADO",
         },
       });
 
