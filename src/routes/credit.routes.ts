@@ -2,32 +2,20 @@ import { Router, Request, Response } from "express";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { verifyToken } from "../middlewares/verifyToken.middleware";
 import prisma from "../lib/prisma";
+import {
+  CREDIT_STATUS,
+  canAccessUserCredits,
+  canAgencyForwardFromStatus,
+  canFinalizeFromStatus,
+  canManageSolicitacao,
+  isFinalCreditStatus,
+  normalizeCreditStatus,
+  resolveCreditRole,
+  toBooleanMatrizAprovacao,
+  type RequesterContext,
+} from "../services/creditPolicy.service";
 
 const creditRouter = Router();
-
-type CreditRole = "MATRIZ" | "AGENCIA" | "ASSOCIADO" | "OUTRO";
-
-const CREDIT_STATUS = {
-  PENDING: "PENDENTE",
-  FORWARDED: "ENCAMINHADO_PARA_MATRIZ",
-  APPROVED: "APROVADO",
-  DENIED: "NEGADO",
-} as const;
-
-type CreditStatus = (typeof CREDIT_STATUS)[keyof typeof CREDIT_STATUS];
-
-const FINAL_CREDIT_STATUSES = new Set<CreditStatus>([
-  CREDIT_STATUS.APPROVED,
-  CREDIT_STATUS.DENIED,
-]);
-
-type RequesterContext = {
-  idUsuario: number;
-  nome: string;
-  matrizId: number | null;
-  usuarioCriadorId: number | null;
-  role: CreditRole;
-};
 
 const creditUserSelect = {
   idUsuario: true,
@@ -47,53 +35,6 @@ const creditInclude = {
   matriz: { select: creditUserSelect },
   usuarioSolicitante: { select: creditUserSelect },
 } as const;
-
-const normalizeText = (value?: string | null) =>
-  value
-    ?.toString()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim() ?? "";
-
-const resolveRole = (tipoConta?: string | null): CreditRole => {
-  const normalized = normalizeText(tipoConta);
-
-  if (normalized === "matriz") return "MATRIZ";
-  if (normalized.includes("associado")) return "ASSOCIADO";
-  if (
-    normalized.includes("franquia") ||
-    normalized.includes("agencia") ||
-    normalized.includes("gerente") ||
-    normalized.includes("master")
-  ) {
-    return "AGENCIA";
-  }
-
-  return "OUTRO";
-};
-
-const normalizeCreditStatus = (value: unknown): CreditStatus | null => {
-  if (typeof value !== "string") return null;
-
-  const normalized = normalizeText(value);
-
-  if (normalized === "pendente") return CREDIT_STATUS.PENDING;
-  if (
-    normalized === "encaminhado para a matriz" ||
-    normalized === "encaminhado para matriz" ||
-    normalized === "encaminhado_para_matriz"
-  ) {
-    return CREDIT_STATUS.FORWARDED;
-  }
-  if (normalized === "aprovado") return CREDIT_STATUS.APPROVED;
-  if (normalized === "negado") return CREDIT_STATUS.DENIED;
-
-  return null;
-};
-
-const isFinalStatus = (status: CreditStatus | null) =>
-  Boolean(status && FINAL_CREDIT_STATUSES.has(status));
 
 const parseValorSolicitado = (value: unknown): number | null => {
   if (typeof value === "number") {
@@ -143,45 +84,9 @@ const getRequesterContext = async (
     nome: requester.nome,
     matrizId: requester.matrizId ?? null,
     usuarioCriadorId: requester.usuarioCriadorId ?? null,
-    role: resolveRole(roleSource),
+    role: resolveCreditRole(roleSource),
   };
 };
-
-const canAccessUserCredits = (
-  requester: RequesterContext,
-  targetUserId: number,
-  targetUserCreatorId: number | null
-) => {
-  if (requester.role === "MATRIZ") return true;
-  if (requester.idUsuario === targetUserId) return true;
-  if (requester.role === "AGENCIA" && targetUserCreatorId === requester.idUsuario)
-    return true;
-  return false;
-};
-
-const canManageSolicitacao = (
-  requester: RequesterContext,
-  solicitacaoUsuarioCriadorId: number
-) => {
-  if (requester.role === "MATRIZ") return true;
-  if (
-    requester.role === "AGENCIA" &&
-    requester.idUsuario === solicitacaoUsuarioCriadorId
-  ) {
-    return true;
-  }
-  return false;
-};
-
-const canFinalizeFromStatus = (currentStatus: CreditStatus | null) =>
-  currentStatus === CREDIT_STATUS.PENDING ||
-  currentStatus === CREDIT_STATUS.FORWARDED;
-
-const canAgencyForwardFromStatus = (currentStatus: CreditStatus | null) =>
-  currentStatus === CREDIT_STATUS.PENDING;
-
-const toBooleanMatrizAprovacao = (status: CreditStatus) =>
-  status === CREDIT_STATUS.APPROVED;
 
 creditRouter.post(
   "/solicitar",
@@ -522,7 +427,7 @@ creditRouter.put(
       }
 
       const statusAtual = normalizeCreditStatus(solicitacaoCredito.status);
-      if (isFinalStatus(statusAtual)) {
+      if (isFinalCreditStatus(statusAtual)) {
         return res.status(409).json({
           error: "Solicitação finalizada não permite novo encaminhamento.",
         });
@@ -676,7 +581,7 @@ creditRouter.put(
       }
 
       const statusAtual = normalizeCreditStatus(solicitacaoCredito.status);
-      if (isFinalStatus(statusAtual)) {
+      if (isFinalCreditStatus(statusAtual)) {
         return res.status(409).json({
           error: "Solicitação já foi finalizada e não pode ser reanalisada.",
         });

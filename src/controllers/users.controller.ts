@@ -9,6 +9,7 @@ import {
   FilialTipo,
   TipoDocumento,
   ClienteStatus,
+  SolicitacaoCreditoStatus,
   Usuarios as UsuarioModel,
   Matriz as MatrizModel,
   Filial as FilialModel,
@@ -16,6 +17,11 @@ import {
   TipoConta as TipoContaModel,
   Conta as ContaModel,
 } from "@prisma/client";
+import {
+  evaluateUserCreationPolicy,
+  resolveCreatorRole,
+  validateCreatorIdPayload,
+} from "../services/userCreationPolicy.service";
 
 type TxClient = Prisma.TransactionClient;
 
@@ -84,6 +90,35 @@ const parseNumeric = (value?: string | number | null) => {
   const normalized = text.replace(/[\s\.](?=\d{3})/g, "").replace(/,/g, ".");
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const createInitialCreditSolicitacao = async (
+  tx: TxClient,
+  params: {
+    valorSolicitado?: number;
+    usuarioSolicitanteId: number;
+    usuarioCriadorId: number;
+    matrizUsuarioId?: number | null;
+    tipoDestino: string;
+  }
+) => {
+  const valorSolicitado = params.valorSolicitado ?? 0;
+  if (!Number.isFinite(valorSolicitado) || valorSolicitado <= 0) {
+    return null;
+  }
+
+  const matrizId = params.matrizUsuarioId ?? null;
+
+  return tx.solicitacaoCredito.create({
+    data: {
+      valorSolicitado,
+      status: SolicitacaoCreditoStatus.PENDENTE,
+      descricaoSolicitante: `Solicitacao automatica de limite inicial no cadastro de ${params.tipoDestino}.`,
+      usuarioSolicitanteId: params.usuarioSolicitanteId,
+      usuarioCriadorId: params.usuarioCriadorId,
+      matrizId,
+    },
+  });
 };
 
 const ensureMatrizRecord = async (
@@ -587,32 +622,71 @@ export const criarUsuario = [
 
       // Verificar se já existe usuário com mesmo email ou CPF
 
+      const authenticatedUserId = Number(res.locals?.userId);
+      if (!Number.isInteger(authenticatedUserId) || authenticatedUserId <= 0) {
+        return res.status(401).json({ error: "Usuário autenticado inválido." });
+      }
+
+      const creatorIdFromBody =
+        usuarioCriadorId && usuarioCriadorId.toString().trim()
+          ? parseInt(usuarioCriadorId.toString(), 10)
+          : null;
+
+      const creatorIdValidation = validateCreatorIdPayload(
+        authenticatedUserId,
+        creatorIdFromBody
+      );
+      if (!creatorIdValidation.allowed) {
+        return res
+          .status(creatorIdValidation.httpStatus ?? 400)
+          .json({ error: creatorIdValidation.error });
+      }
+
+      const resolvedCreatorId = authenticatedUserId;
+
+      const usuarioCriador = await prisma.usuarios.findUnique({
+        where: { idUsuario: resolvedCreatorId },
+        include: {
+          conta: {
+            include: {
+              tipoDaConta: true,
+            },
+          },
+          filialAuth: {
+            select: {
+              id: true,
+              tipo: true,
+            },
+          },
+        },
+      });
+
+      if (!usuarioCriador) {
+        return res.status(404).json({ error: "Usuário criador não encontrado." });
+      }
+
+      const criadorTipoNormalizado = normalizeTipo(usuarioCriador.tipo);
+      const tipoContaCriador = usuarioCriador.conta?.tipoDaConta?.tipoDaConta;
+      const creatorRole = resolveCreatorRole({
+        tipo: usuarioCriador.tipo,
+        tipoConta: tipoContaCriador,
+        filialTipo: usuarioCriador.filialAuth?.tipo ?? null,
+      });
+      const creationPolicy = evaluateUserCreationPolicy({
+        targetTipo: tipo,
+        creatorRole,
+      });
+      if (!creationPolicy.allowed) {
+        return res
+          .status(creationPolicy.httpStatus ?? 403)
+          .json({ error: creationPolicy.error });
+      }
 
       let matrizId: number | null = null;
 
       // Lógica para determinar matriz
-      if (usuarioCriadorId) {
-        
-        const usuarioCriador = await prisma.usuarios.findUnique({
-          where: { idUsuario: parseInt(usuarioCriadorId, 10) },
-          include: {
-            conta: {
-              include: {
-                tipoDaConta: true,
-              },
-            },
-          },
-        });
-
-        if (!usuarioCriador) {
-          return res
-            .status(404)
-            .json({ error: "Usuário criador não encontrado." });
-        }
-
-        const tipoConta = usuarioCriador.conta?.tipoDaConta?.tipoDaConta;
-        
-        if (tipoConta === "Matriz") {
+      if (resolvedCreatorId) {
+        if (tipoContaCriador === "Matriz") {
           matrizId = usuarioCriador.idUsuario;
         } else if (usuarioCriador.matrizId) {
           matrizId = usuarioCriador.matrizId;
@@ -628,7 +702,7 @@ export const criarUsuario = [
             tentativas < maxTentativas
           ) {
             tentativas++;
-            usuarioAtual = await prisma.usuarios.findUnique({
+            usuarioAtual = (await prisma.usuarios.findUnique({
               where: { idUsuario: usuarioAtual.usuarioCriadorId },
               include: {
                 conta: {
@@ -637,7 +711,7 @@ export const criarUsuario = [
                   },
                 },
               },
-            }) as any;
+            })) as any;
 
             if (!usuarioAtual) break;
           }
@@ -769,11 +843,9 @@ export const criarUsuario = [
           filialId: null,
         };
 
-        // Adicionar campos específicos se usuarioCriadorId existir
-        if (usuarioCriadorId) {
-          (dadosUsuario as any).usuarioCriadorId = parseInt(usuarioCriadorId, 10);
-          (dadosUsuario as any).matrizId = matrizId;
-        }
+        // Força vínculo com o usuário autenticado para evitar spoofing de criador.
+        (dadosUsuario as any).usuarioCriadorId = resolvedCreatorId;
+        (dadosUsuario as any).matrizId = matrizId;
 
 
         // Criar usuário base
@@ -783,7 +855,7 @@ export const criarUsuario = [
 
         const tipoNormalizado = (tipo || "").toLowerCase();
         await assignDefaultPermissionGroup(tx, novoUsuario, tipo || "");
-        const criadorId = usuarioCriadorId ? parseInt(usuarioCriadorId, 10) : null;
+        const criadorId = resolvedCreatorId;
         const criadorUsuario = criadorId
           ? await tx.usuarios.findUnique({ where: { idUsuario: criadorId } })
           : null;
@@ -833,11 +905,18 @@ export const criarUsuario = [
         }
 
         if (isFilialMaster || isFilialComum) {
-          const filialPai = isFilialMaster
-            ? null
-            : criadorUsuario
-            ? await ensureFilialByUsuario(tx, criadorUsuario)
-            : null;
+          let filialPai: FilialModel | null = null;
+          if (!isFilialMaster && criadorUsuario) {
+            filialPai = await ensureFilialByUsuario(tx, criadorUsuario);
+            if (!filialPai && criadorTipoNormalizado === "matriz" && matrizRecord) {
+              filialPai = await ensureFilialRecord(
+                tx,
+                criadorUsuario,
+                matrizRecord,
+                FilialTipo.MASTER
+              );
+            }
+          }
 
           filialRecord = await ensureFilialRecord(
             tx,
@@ -878,7 +957,7 @@ export const criarUsuario = [
           const contaFilial = await ensureFilialConta(tx, novoUsuario, matrizRecord!, filialRecord, {
             saldoPermuta: 0,
             saldoDinheiro: 0,
-            limiteCredito: limiteCreditoAgencia,
+            limiteCredito: 0,
             limiteVendaMensal: limiteVendaMensalAgencia,
             limiteVendaTotal: limiteVendaTotalAgencia,
             limiteVendaEmpresa: limiteVendaEmpresaAgencia,
@@ -891,6 +970,14 @@ export const criarUsuario = [
           });
 
           novaConta = contaFilial;
+
+          await createInitialCreditSolicitacao(tx, {
+            valorSolicitado: limiteCreditoAgencia,
+            usuarioSolicitanteId: novoUsuario.idUsuario,
+            usuarioCriadorId: resolvedCreatorId,
+            matrizUsuarioId: matrizUsuarioBase?.idUsuario ?? matrizId,
+            tipoDestino: "agencia",
+          });
         }
 
         if (criadorUsuario && criadorTipoNormalizado === "matriz" && matrizRecord) {
@@ -947,6 +1034,7 @@ export const criarUsuario = [
             : criadorUsuario
             ? await ensureFilialByUsuario(tx, criadorUsuario)
             : null;
+          const limiteCreditoGerente = parseNumeric(limiteCredito) ?? 0;
 
           // Buscar tipo de conta dinamicamente
           const tipoContaId = await buscarTipoConta(tx, 'Gerente');
@@ -960,12 +1048,12 @@ export const criarUsuario = [
             tipoContaId: tipoContaId, // Busca dinâmica
             usuarioId: novoUsuario.idUsuario,
             nomeFranquia: filialParaConta?.nomeFantasia || nomeFantasia || nome,
-            limiteCredito: limiteCredito ? parseFloat(limiteCredito.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 0,
+            limiteCredito: 0,
             taxaRepasseMatriz: 0, // CORREÇÃO: taxaGerente agora vai para taxaComissaoGerente na tabela Usuarios
             dataVencimentoFatura: dataVencimentoFatura ? parseInt(dataVencimentoFatura, 10) : 10,
             diaFechamentoFatura: 25, // Padrão
             planoId: planoId ? parseInt(planoId, 10) : null,
-            gerenteContaId: usuarioCriadorId ? parseInt(usuarioCriadorId, 10) : null,
+            gerenteContaId: resolvedCreatorId,
             // Valores do formulário ou padrão
             limiteUtilizado: 0,
             saldoPermuta: saldoPermuta ? parseFloat(saldoPermuta.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 0,
@@ -989,6 +1077,14 @@ export const criarUsuario = [
             data: dadosConta,
           });
 
+          await createInitialCreditSolicitacao(tx, {
+            valorSolicitado: limiteCreditoGerente,
+            usuarioSolicitanteId: novoUsuario.idUsuario,
+            usuarioCriadorId: resolvedCreatorId,
+            matrizUsuarioId: matrizUsuarioBase?.idUsuario ?? matrizId,
+            tipoDestino: "gerente",
+          });
+
         }
 
         // CRIAR CONTA PARA ASSOCIADOS
@@ -1003,7 +1099,8 @@ export const criarUsuario = [
           // Calcular saldo inicial baseado na forma de pagamento e plano
           let saldoPermutaInicial = 0;
           let limiteUtilizadoInicial = 0;
-          let limiteCreditoCalculado = limiteCredito ? parseFloat(limiteCredito.toString().replace(/[^\d,.-]/g, '').replace(',', '.')) : 5000;
+          const limiteCreditoAssociadoSolicitado = parseNumeric(limiteCredito) ?? 0;
+          const limiteCreditoCalculado = 0;
 
           // Aplicar débito baseado na forma de pagamento
           if (planoId && formaPagamento) {
@@ -1028,14 +1125,6 @@ export const criarUsuario = [
               if (valorDebito > 0) {
                 // Aplicar débito no saldoPermuta (fica negativo)
                 saldoPermutaInicial = -valorDebito;
-                
-                // Se limite de crédito for 0, usar o valor do débito como limite e como utilizado
-                if (limiteCreditoCalculado === 0) {
-                  limiteCreditoCalculado = valorDebito;
-                  limiteUtilizadoInicial = valorDebito;
-                } else if (limiteCreditoCalculado >= valorDebito) {
-                  limiteUtilizadoInicial = valorDebito;
-                }
               }
             }
           }
@@ -1076,6 +1165,14 @@ export const criarUsuario = [
 
           novaConta = await tx.conta.create({
             data: dadosConta,
+          });
+
+          await createInitialCreditSolicitacao(tx, {
+            valorSolicitado: limiteCreditoAssociadoSolicitado,
+            usuarioSolicitanteId: novoUsuario.idUsuario,
+            usuarioCriadorId: resolvedCreatorId,
+            matrizUsuarioId: matrizUsuarioBase?.idUsuario ?? matrizId,
+            tipoDestino: "associado",
           });
 
         }

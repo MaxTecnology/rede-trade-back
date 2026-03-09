@@ -29,7 +29,8 @@ userRouter.post('/upload-imagem', upload.any(), uploadImagem);
 // Rota para criar um usuário com upload de imagem
 userRouter.post("/criar-usuario", 
   authRateLimit, // Rate limiting DESABILITADO para testes
-  /*verifyToken, checkBlocked, */
+  verifyToken,
+  checkBlocked,
   upload.single('imagem'), // Parse FormData primeiro
   validateUsuario, // ✅ Validação após parse do FormData
   async (req: Request, res: Response, next: NextFunction) => {
@@ -232,7 +233,7 @@ userRouter.get('/associados/estatisticas', apiRateLimit, verifyToken, async (req
 });
 
 // Rota para listar gerentes - ADICIONE ANTES da rota '/buscar-usuario/:id'
-userRouter.get('/listar-gerentes', async (req: Request, res: Response) => {
+userRouter.get('/listar-gerentes', verifyToken, checkBlocked, async (req: Request, res: Response) => {
   try {
     const { 
       page = 1, 
@@ -241,6 +242,8 @@ userRouter.get('/listar-gerentes', async (req: Request, res: Response) => {
       estado,
       cidade 
     } = req.query;
+    const usuarioLogadoId = Number(res.locals.userId);
+    const scope = await resolveDashboardScope(usuarioLogadoId);
 
     
     const pageNumber = Math.max(1, parseInt(page as string, 10) || 1);
@@ -275,6 +278,11 @@ userRouter.get('/listar-gerentes', async (req: Request, res: Response) => {
       whereClause.AND.push({ 
         cidade: { contains: cidade.trim(), mode: 'insensitive' } 
       });
+    }
+
+    // Escopo: Matriz enxerga todos. Demais perfis enxergam apenas gerentes da unidade responsável.
+    if (scope.role !== "matriz" && scope.agenciaOwnerId) {
+      whereClause.AND.push({ usuarioCriadorId: scope.agenciaOwnerId });
     }
 
     // Buscar gerentes
@@ -340,7 +348,7 @@ userRouter.get('/listar-gerentes', async (req: Request, res: Response) => {
 });
 
 // Rota para buscar um usuário pelo ID
-userRouter.get('/buscar-usuario/:id', async (req: Request, res: Response) => {
+userRouter.get('/buscar-usuario/:id', verifyToken, checkBlocked, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -1084,8 +1092,7 @@ userRouter.get('/user-info', verifyToken, async (_req: Request, res: Response) =
   }
 });
 
-userRouter.post("/listar-tipo-usuarios",   /*verifyToken,
-  checkBlocked,*/ async (req: Request, res: Response) => {
+userRouter.post("/listar-tipo-usuarios", verifyToken, checkBlocked, async (req: Request, res: Response) => {
     try {
       const { page = 1, pageSize = 100 } = req.query;
       const pageNumber = parseInt(page as string, 10);
@@ -1162,7 +1169,7 @@ userRouter.post("/listar-tipo-usuarios",   /*verifyToken,
   }
 );
 
-userRouter.get("/listar-ofertas/:idUsuario",  async (req: Request, res: Response) => {
+userRouter.get("/listar-ofertas/:idUsuario", verifyToken, checkBlocked, async (req: Request, res: Response) => {
     try {
       const { idUsuario } = req.params;
 

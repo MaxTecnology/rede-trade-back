@@ -1,6 +1,24 @@
 // accountController.ts
 import { Request, Response } from "express";
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
+import { SolicitacaoCreditoStatus } from "@prisma/client";
+
+const parseNumber = (value: unknown): number => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value
+      .replace(/[^\d.,-]/g, "")
+      .replace(/\./g, "")
+      .replace(",", ".");
+    const parsed = Number.parseFloat(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+};
 
 export const criarConta = async (req: Request, res: Response) => {
   try {
@@ -25,6 +43,11 @@ export const criarConta = async (req: Request, res: Response) => {
       permissoesEspecificas,
     } = req.body;
     const idUsuario = parseInt(req.params.id, 10);
+    const requesterId = Number(res.locals.userId);
+
+    if (!Number.isInteger(requesterId) || requesterId <= 0) {
+      return res.status(401).json({ error: "Usuário autenticado inválido." });
+    }
 
     // Encontrar o usuário pelo ID
     const usuarioExistente = await prisma.usuarios.findUnique({
@@ -34,6 +57,38 @@ export const criarConta = async (req: Request, res: Response) => {
     if (!usuarioExistente) {
       return res.status(404).json({ error: "Usuário não encontrado." });
     }
+
+    const requester = await prisma.usuarios.findUnique({
+      where: { idUsuario: requesterId },
+      include: {
+        conta: {
+          include: {
+            tipoDaConta: true,
+          },
+        },
+      },
+    });
+
+    if (!requester) {
+      return res.status(401).json({ error: "Usuário autenticado inválido." });
+    }
+
+    const requesterTipoConta = requester.conta?.tipoDaConta?.tipoDaConta;
+    const requesterIsMatriz =
+      requesterTipoConta === "Matriz" || requester.tipo === "Matriz";
+
+    const requesterPodeCriarConta =
+      requesterIsMatriz ||
+      requesterId === idUsuario ||
+      requesterId === usuarioExistente.usuarioCriadorId;
+
+    if (!requesterPodeCriarConta) {
+      return res.status(403).json({
+        error: "Você não possui permissão para criar conta para este usuário.",
+      });
+    }
+
+    const limiteCreditoSolicitado = parseNumber(limiteCredito);
     // Verificar se o usuário já possui uma conta
     const usuarioContaExistente = await prisma.conta.findFirst({
       where: { usuarioId: idUsuario },
@@ -187,21 +242,21 @@ export const criarConta = async (req: Request, res: Response) => {
         tipoContaId: tipoConta.idTipoConta,
         usuarioId: idUsuario,
         numeroConta,
-        limiteCredito: limiteCredito ? parseFloat(limiteCredito) : 0,
-        saldoPermuta: saldoPermuta ? parseFloat(saldoPermuta) : 0,
-        saldoDinheiro: saldoDinheiro ? parseFloat(saldoDinheiro) : 0,
+        limiteCredito: 0,
+        saldoPermuta: parseNumber(saldoPermuta),
+        saldoDinheiro: parseNumber(saldoDinheiro),
         diaFechamentoFatura: diaFechamentoFatura ? parseInt(diaFechamentoFatura, 10) : 0,
         dataVencimentoFatura: dataVencimentoFatura ? parseInt(dataVencimentoFatura, 10) : 0,
         nomeFranquia,
-        limiteVendaEmpresa: limiteVendaEmpresa ? parseFloat(limiteVendaEmpresa) : 0,
-        limiteVendaMensal: limiteVendaMensal ? parseFloat(limiteVendaMensal) : 0,
-        limiteVendaTotal: limiteVendaTotal ? parseFloat(limiteVendaTotal) : 0,
-        valorVendaMensalAtual: valorVendaMensalAtual ? parseFloat(valorVendaMensalAtual) : 0,
-        valorVendaTotalAtual: valorVendaTotalAtual ? parseFloat(valorVendaTotalAtual) : 0,
-        taxaRepasseMatriz: taxaRepasseMatriz ? parseFloat(taxaRepasseMatriz) : 0,
+        limiteVendaEmpresa: parseNumber(limiteVendaEmpresa),
+        limiteVendaMensal: parseNumber(limiteVendaMensal),
+        limiteVendaTotal: parseNumber(limiteVendaTotal),
+        valorVendaMensalAtual: parseNumber(valorVendaMensalAtual),
+        valorVendaTotalAtual: parseNumber(valorVendaTotalAtual),
+        taxaRepasseMatriz: parseNumber(taxaRepasseMatriz),
         formaPagamentoPlano: formaPagamentoPlano ?? "0",
-        valorPlanoPermuta: valorPlanoPermuta ? parseFloat(valorPlanoPermuta) : 0,
-        valorPlanoDinheiro: valorPlanoDinheiro ? parseFloat(valorPlanoDinheiro) : 0,
+        valorPlanoPermuta: parseNumber(valorPlanoPermuta),
+        valorPlanoDinheiro: parseNumber(valorPlanoDinheiro),
         permissoesEspecificas,
         planoId,
       },
@@ -209,15 +264,28 @@ export const criarConta = async (req: Request, res: Response) => {
         plano: true,
       },
     });
-    // Registrar o valor no FundoPermuta
-    const fundoPermutaData = {
-      valor: limiteCredito || 0,
-      usuarioId: idUsuario,
-    };
 
-    await prisma.fundoPermuta.create({
-      data: fundoPermutaData,
-    });
+    if (limiteCreditoSolicitado > 0) {
+      const matrizId =
+        usuarioExistente.matrizId ??
+        usuarioCriador?.matrizId ??
+        (usuarioCriador?.conta?.tipoDaConta?.tipoDaConta === "Matriz"
+          ? usuarioCriador.idUsuario
+          : null);
+
+      await prisma.solicitacaoCredito.create({
+        data: {
+          valorSolicitado: limiteCreditoSolicitado,
+          status: SolicitacaoCreditoStatus.PENDENTE,
+          descricaoSolicitante:
+            "Solicitacao automatica de limite inicial na criacao de conta.",
+          usuarioSolicitanteId: idUsuario,
+          usuarioCriadorId:
+            usuarioExistente.usuarioCriadorId ?? requesterId ?? idUsuario,
+          matrizId,
+        },
+      });
+    }
 
     return res.status(201).json(novaConta);
   } catch (error) {

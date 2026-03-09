@@ -11,6 +11,7 @@ import { verifyToken } from "../middlewares/verifyToken.middleware";
 import { checkBlocked } from "../middlewares/checkBlocked.middleware";
 import { upload } from "../middlewares/upload"; // Importar o middleware de upload
 import prisma from "../lib/prisma"; // ✅ USANDO SINGLETON
+import { resolveCreatorRole } from "../services/userCreationPolicy.service";
 
 const accountRouter = Router();
 
@@ -130,8 +131,8 @@ accountRouter.delete(
 // Rota para criar uma conta para um usuário
 accountRouter.post(
   "/criar-conta-para-usuario/:id",
-  /*  verifyToken,
-    checkBlocked,*/
+  verifyToken,
+  checkBlocked,
   criarConta
 );
 
@@ -365,6 +366,59 @@ accountRouter.put(
 
       if (!contaExistente) {
         return res.status(404).json({ error: "Conta não encontrada." });
+      }
+
+      const requesterId = Number(res.locals.userId);
+      if (!Number.isInteger(requesterId) || requesterId <= 0) {
+        return res.status(401).json({ error: "Usuário autenticado inválido." });
+      }
+
+      const requester = await prisma.usuarios.findUnique({
+        where: { idUsuario: requesterId },
+        select: {
+          tipo: true,
+          filialAuth: {
+            select: {
+              tipo: true,
+            },
+          },
+          conta: {
+            select: {
+              tipoDaConta: {
+                select: {
+                  tipoDaConta: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!requester) {
+        return res.status(401).json({ error: "Usuário autenticado inválido." });
+      }
+
+      const requesterRole = resolveCreatorRole({
+        tipo: requester.tipo,
+        tipoConta: requester.conta?.tipoDaConta?.tipoDaConta ?? null,
+        filialTipo: requester.filialAuth?.tipo ?? null,
+      });
+
+      const camposCreditoDireto = [
+        "limiteCredito",
+        "limiteUtilizado",
+        "limiteDisponivel",
+      ] as const;
+
+      const tentouAlterarCreditoDireto = camposCreditoDireto.some((campo) =>
+        Object.prototype.hasOwnProperty.call(req.body, campo)
+      );
+
+      if (tentouAlterarCreditoDireto && !requesterRole.isMatriz) {
+        return res.status(403).json({
+          error:
+            "Apenas a Matriz pode alterar limite de crédito diretamente. Solicite crédito pelo fluxo de análise.",
+        });
       }
 
       const parseNumber = (value: any) => {
