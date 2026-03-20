@@ -4,7 +4,7 @@ import accountRouter from "./routes/account.routes";
 import userRouter from "./routes/users.routes";
 import planRouter from "./routes/plan.routes";
 import dotenv from "dotenv";
-import cors from "cors";
+import cors, { CorsOptions } from "cors";
 import categoryRouter from "./routes/categories.routes";
 import offerRouter from "./routes/offer.routes";
 import transactionRouter from "./routes/transaction.routes";
@@ -20,18 +20,25 @@ dotenv.config();
 
 const app = express();
 
-// Configuração do CORS - Restringir origens permitidas
-const corsOptions = {
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:5173', // Vite dev server
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:5173'
-    // Adicionar domínios de produção quando necessário
-  ],
+const defaultAllowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5173",
+];
+
+const allowedOrigins = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const corsOptions: CorsOptions = {
+  origin: allowedOrigins.length === 0
+    ? defaultAllowedOrigins
+    : (allowedOrigins.includes("*") ? true : allowedOrigins),
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
 };
 
 app.use(cors(corsOptions));
@@ -44,6 +51,10 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 // Rotas da sua aplicação
 app.get("/", (_req:Request, res:Response) => {
   res.send("Running...!");
+});
+
+app.get("/health", (_req: Request, res: Response) => {
+  res.status(200).json({ status: "ok" });
 });
 
 app.use("/contas", accountRouter)
@@ -61,9 +72,16 @@ app.use("/auditoria", auditoriaRouter); // FASE 2.1 - Sistema de Auditoria
 app.use("/permissions", permissionsRouter);
 app.use("/api/permissions", permissionsRouter);
 
-//const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3024;
 
-app.listen(3024, '0.0.0.0', () => {
-  console.log(`Servidor iniciado na porta 3024`);
-  console.log('📁 Servindo arquivos estáticos de: /uploads');
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Servidor iniciado na porta ${PORT}`);
+  console.log("📁 Servindo arquivos estáticos de: /uploads");
+  console.log(
+    `🌐 CORS habilitado para: ${
+      allowedOrigins.length === 0
+        ? defaultAllowedOrigins.join(", ")
+        : (allowedOrigins.includes("*") ? "*" : allowedOrigins.join(", "))
+    }`
+  );
 });

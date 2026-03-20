@@ -23,7 +23,14 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "start": "ts-node src/index.ts",
     "build": "tsc",
-    "deploy": "npm run build && cp -r dist /var/www/rede-trade-api/ && cp -r prisma /var/www/rede-trade-api/ && cd /var/www/rede-trade-api && npx prisma generate --schema=./prisma/schema.prisma && pm2 restart rede-trade-api --update-env"
+    "deploy": "npm run build && cp -r dist /var/www/rede-trade-api/ && cp -r prisma /var/www/rede-trade-api/ && cd /var/www/rede-trade-api && npx prisma generate --schema=./prisma/schema.prisma && pm2 restart rede-trade-api --update-env",
+    "docker:local:up": "docker compose --env-file .env.local -f docker-compose.yml up -d --build",
+    "docker:local:down": "docker compose --env-file .env.local -f docker-compose.yml down",
+    "docker:local:logs": "docker compose --env-file .env.local -f docker-compose.yml logs -f",
+    "docker:prod:up": "docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build",
+    "docker:prod:down": "docker compose --env-file .env.prod -f docker-compose.prod.yml down",
+    "docker:prod:logs": "docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f",
+    "docker:prod:tools": "docker compose --env-file .env.prod -f docker-compose.prod.yml --profile tools up -d"
   },
   "keywords": [],
   "author": "",

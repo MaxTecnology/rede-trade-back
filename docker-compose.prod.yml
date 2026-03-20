@@ -5,48 +5,44 @@ services:
     image: postgres:15-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-rede_trade_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-rede_trade}
       POSTGRES_USER: ${POSTGRES_USER:-rede_trade}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-troque_esta_senha}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rede_trade} -d ${POSTGRES_DB:-rede_trade_dev}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rede_trade} -d ${POSTGRES_DB:-rede_trade}"]
       interval: 10s
       timeout: 5s
       retries: 10
-    ports:
-      - "${DB_PORT:-5432}:5432"
     volumes:
-      - postgres_local_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - rede_trade_net
 
   api:
-    image: node:20-alpine
-    working_dir: /app
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       PORT: 3024
-      DATABASE_URL: postgresql://${POSTGRES_USER:-rede_trade}:${POSTGRES_PASSWORD:-dev_password}@db:5432/${POSTGRES_DB:-rede_trade_dev}?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-rede_trade}:${POSTGRES_PASSWORD:-troque_esta_senha}@db:5432/${POSTGRES_DB:-rede_trade}?schema=public
       SECRET: ${SECRET:-troque_esta_chave}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://app.seudominio.com.br}
       MAILUSER: ${MAILUSER:-}
       MAILPASS: ${MAILPASS:-}
-      CHOKIDAR_USEPOLLING: "true"
-    command: >
-      sh -c "npm ci &&
-      npx prisma generate --schema=./prisma/schema.prisma &&
-      npx prisma migrate deploy --schema=./prisma/schema.prisma &&
-      npm run dev"
     volumes:
-      - ./:/app
-      - api_node_modules:/app/node_modules
-      - uploads_local_data:/app/uploads
+      - uploads_data:/app/uploads
     ports:
       - "${API_PORT:-3024}:3024"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3024/health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     networks:
       - rede_trade_net
 
@@ -63,15 +59,14 @@ services:
     ports:
       - "${PGADMIN_PORT:-8080}:80"
     volumes:
-      - pgadmin_local_data:/var/lib/pgadmin
+      - pgadmin_data:/var/lib/pgadmin
     networks:
       - rede_trade_net
 
 volumes:
-  postgres_local_data:
-  uploads_local_data:
-  api_node_modules:
-  pgadmin_local_data:
+  postgres_data:
+  uploads_data:
+  pgadmin_data:
 
 networks:
   rede_trade_net:
